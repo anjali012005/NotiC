@@ -23,7 +23,14 @@ public class NotificationTemplateMapper {
     public NotificationTemplateResponse toResponse(NotificationTemplate template) {
         return NotificationTemplateResponse.builder()
                 .id(template.getId())
-                .message("Notification template created successfully")
+                .templateKey(template.getTemplateKey())
+                .name(template.getName())
+                .channel(template.getChannel())
+                .subject(template.getSubject())
+                .body(template.getBody())
+                .tags(template.getTags())
+                .createdAt(template.getCreatedAt())
+                .message("Notification template retrieved successfully")
                 .build();
     }
 }
