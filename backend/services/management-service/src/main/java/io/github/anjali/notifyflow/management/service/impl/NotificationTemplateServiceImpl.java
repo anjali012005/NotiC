@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
@@ -38,7 +40,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
 
         NotificationTemplate template = mapper.toEntity(request);
         NotificationTemplate savedTemplate = repository.save(template);
-        return mapper.toResponse(savedTemplate);
+        return mapper.toResponse(savedTemplate, "Notification template created successfully");
     }
 
     @Override
@@ -88,6 +90,29 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
                 .totalPages(templatePage.getTotalPages())
                 .totalElements(templatePage.getTotalElements())
                 .last(templatePage.isLast())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public NotificationTemplateResponse updateTemplate(UUID id, UpdateNotificationTemplateRequest request) {
+        NotificationTemplate existingTemplate = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+
+        NotificationTemplate updatedTemplate = mapper.updateEntity(request, existingTemplate);
+        NotificationTemplate savedTemplate = repository.save(updatedTemplate);
+        return mapper.toResponse(savedTemplate, "Notification template updated successfully");
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse deleteTemplate(UUID id) {
+        NotificationTemplate template = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+
+        repository.delete(template);
+        return MessageResponse.builder()
+                .message("Notification template deleted successfully")
                 .build();
     }
 }

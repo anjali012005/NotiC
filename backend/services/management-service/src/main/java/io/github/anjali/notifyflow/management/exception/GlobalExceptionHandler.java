@@ -10,6 +10,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -24,6 +25,13 @@ public class GlobalExceptionHandler {
         }
 
         Map<String, Object> body = buildErrorBody(HttpStatus.BAD_REQUEST, "Validation failed", errors, request.getRequestURI());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        String message = "Invalid value for '" + ex.getName() + "'. Expected a valid UUID.";
+        Map<String, Object> body = buildErrorBody(HttpStatus.BAD_REQUEST, message, null, request.getRequestURI());
         return ResponseEntity.badRequest().body(body);
     }
 
