@@ -7,7 +7,9 @@ import org.springframework.stereotype.Component;
 import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
+import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
+import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
 
 @Component
 public class NotificationTemplateMapper {
@@ -50,5 +52,30 @@ public class NotificationTemplateMapper {
             existingTemplate.setTags(new HashSet<>(request.getTags()));
         }
         return existingTemplate;
+    }
+
+    public NotificationTemplateVersionResponse toVersionResponse(NotificationTemplateVersion version) {
+        return NotificationTemplateVersionResponse.builder()
+                .id(version.getId())
+                .version(version.getVersion())
+                .name(version.getName())
+                .channel(version.getChannel())
+                .subject(version.getSubject())
+                .body(version.getBody())
+                .tags(version.getTags())
+                .createdAt(version.getCreatedAt())
+                .build();
+    }
+
+    public NotificationTemplateVersion toVersionEntity(NotificationTemplate template, Integer versionNumber, NotificationTemplate existingTemplate) {
+        return NotificationTemplateVersion.builder()
+                .template(template)
+                .version(versionNumber)
+                .name(existingTemplate.getName())
+                .channel(existingTemplate.getChannel())
+                .subject(existingTemplate.getSubject())
+                .body(existingTemplate.getBody())
+                .tags(existingTemplate.getTags() != null ? new HashSet<>(existingTemplate.getTags()) : new HashSet<>())
+                .build();
     }
 }

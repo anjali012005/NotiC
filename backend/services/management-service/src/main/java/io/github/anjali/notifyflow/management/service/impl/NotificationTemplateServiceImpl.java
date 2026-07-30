@@ -14,13 +14,16 @@ import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemp
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
+import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
+import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.exception.DuplicateTemplateKeyException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationTemplateMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
+import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 public class NotificationTemplateServiceImpl implements NotificationTemplateService {
 
     private final NotificationTemplateRepository repository;
+    private final NotificationTemplateVersionRepository versionRepository;
     private final NotificationTemplateMapper mapper;
 
     @Override
@@ -39,7 +43,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         }
 
         NotificationTemplate template = mapper.toEntity(request);
+        template.setActiveVersion(1);
         NotificationTemplate savedTemplate = repository.save(template);
+
+        NotificationTemplateVersion initialVersion = mapper.toVersionEntity(savedTemplate, 1, savedTemplate);
+        versionRepository.save(initialVersion);
+
         return mapper.toResponse(savedTemplate, "Notification template created successfully");
     }
 
@@ -100,8 +109,37 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
 
         NotificationTemplate updatedTemplate = mapper.updateEntity(request, existingTemplate);
+        int nextVersion = existingTemplate.getActiveVersion() == null ? 1 : existingTemplate.getActiveVersion() + 1;
+        updatedTemplate.setActiveVersion(nextVersion);
         NotificationTemplate savedTemplate = repository.save(updatedTemplate);
+
+        NotificationTemplateVersion newVersion = mapper.toVersionEntity(savedTemplate, nextVersion, updatedTemplate);
+        versionRepository.save(newVersion);
+
         return mapper.toResponse(savedTemplate, "Notification template updated successfully");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<NotificationTemplateVersionResponse> getTemplateVersions(UUID id) {
+        NotificationTemplate template = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+
+        return versionRepository.findByTemplateIdOrderByVersionDesc(template.getId()).stream()
+                .map(mapper::toVersionResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public NotificationTemplateVersionResponse getTemplateVersion(UUID id, Integer version) {
+        NotificationTemplate template = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+
+        NotificationTemplateVersion templateVersion = versionRepository.findByTemplateIdAndVersion(template.getId(), version)
+                .orElseThrow(() -> new ResourceNotFoundException("Version not found for template " + id + " and version " + version));
+
+        return mapper.toVersionResponse(templateVersion);
     }
 
     @Override

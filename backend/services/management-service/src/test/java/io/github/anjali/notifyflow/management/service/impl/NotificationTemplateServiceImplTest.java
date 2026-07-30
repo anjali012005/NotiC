@@ -25,13 +25,16 @@ import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemp
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
+import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
+import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.exception.DuplicateTemplateKeyException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationTemplateMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
+import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationTemplateServiceImplTest {
@@ -41,6 +44,9 @@ class NotificationTemplateServiceImplTest {
 
     @Mock
     private NotificationTemplateMapper mapper;
+
+    @Mock
+    private NotificationTemplateVersionRepository versionRepository;
 
     @InjectMocks
     private NotificationTemplateServiceImpl service;
@@ -261,5 +267,37 @@ class NotificationTemplateServiceImplTest {
         assertThatThrownBy(() -> service.deleteTemplate(id))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Template not found");
+    }
+
+    @Test
+    void getTemplateVersionsReturnsVersionsNewestFirst() {
+        UUID templateId = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder().id(templateId).build();
+        NotificationTemplateVersion versionOne = NotificationTemplateVersion.builder().version(1).subject("Welcome").build();
+        NotificationTemplateVersion versionTwo = NotificationTemplateVersion.builder().version(2).subject("Hello").build();
+
+        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplateIdOrderByVersionDesc(templateId)).thenReturn(List.of(versionTwo, versionOne));
+        when(mapper.toVersionResponse(versionTwo)).thenReturn(NotificationTemplateVersionResponse.builder().version(2).subject("Hello").build());
+        when(mapper.toVersionResponse(versionOne)).thenReturn(NotificationTemplateVersionResponse.builder().version(1).subject("Welcome").build());
+
+        List<NotificationTemplateVersionResponse> response = service.getTemplateVersions(templateId);
+
+        assertThat(response).hasSize(2);
+        assertThat(response.get(0).getVersion()).isEqualTo(2);
+        assertThat(response.get(1).getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void getTemplateVersionThrowsWhenVersionDoesNotExist() {
+        UUID templateId = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder().id(templateId).build();
+
+        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplateIdAndVersion(templateId, 7)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getTemplateVersion(templateId, 7))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Version not found");
     }
 }

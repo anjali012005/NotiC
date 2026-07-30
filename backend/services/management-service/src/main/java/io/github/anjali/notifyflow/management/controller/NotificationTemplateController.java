@@ -1,5 +1,6 @@
 package io.github.anjali.notifyflow.management.controller;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,7 @@ import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemp
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
+import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
@@ -65,6 +67,18 @@ public class NotificationTemplateController {
     public ResponseEntity<NotificationTemplateResponse> updateTemplate(@PathVariable UUID id,
             @Valid @RequestBody UpdateNotificationTemplateRequest request) {
         NotificationTemplateResponse response = notificationTemplateService.updateTemplate(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/versions")
+    public ResponseEntity<List<NotificationTemplateVersionResponse>> getTemplateVersions(@PathVariable UUID id) {
+        List<NotificationTemplateVersionResponse> response = notificationTemplateService.getTemplateVersions(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/versions/{version}")
+    public ResponseEntity<NotificationTemplateVersionResponse> getTemplateVersion(@PathVariable UUID id, @PathVariable Integer version) {
+        NotificationTemplateVersionResponse response = notificationTemplateService.getTemplateVersion(id, version);
         return ResponseEntity.ok(response);
     }
 
