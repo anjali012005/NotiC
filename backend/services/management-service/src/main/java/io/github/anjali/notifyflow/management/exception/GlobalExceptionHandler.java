@@ -47,6 +47,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
+    @ExceptionHandler(InvalidTemplateVariableException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidTemplateVariable(InvalidTemplateVariableException ex, HttpServletRequest request) {
+        Map<String, Object> body = buildErrorBody(HttpStatus.BAD_REQUEST, ex.getMessage(), null, request.getRequestURI());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(MissingRequiredVariableException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingRequiredVariable(MissingRequiredVariableException ex, HttpServletRequest request) {
+        Map<String, Object> body = buildErrorBody(HttpStatus.BAD_REQUEST, ex.getMessage(), null, request.getRequestURI());
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex, HttpServletRequest request) {
         Map<String, Object> body = buildErrorBody(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", null, request.getRequestURI());

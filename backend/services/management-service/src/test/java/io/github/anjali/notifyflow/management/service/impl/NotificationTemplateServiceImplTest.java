@@ -22,22 +22,34 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
+import io.github.anjali.notifyflow.management.dto.response.RenderTemplateResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
+import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
+import io.github.anjali.notifyflow.management.entity.TemplateVariable;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.exception.DuplicateTemplateKeyException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationTemplateMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
+import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
+import io.github.anjali.notifyflow.management.repository.TemplateVariableRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationTemplateServiceImplTest {
 
     @Mock
     private NotificationTemplateRepository repository;
+
+    @Mock
+    private NotificationTemplateVersionRepository versionRepository;
+
+    @Mock
+    private TemplateVariableRepository variableRepository;
 
     @Mock
     private NotificationTemplateMapper mapper;
@@ -72,6 +84,9 @@ class NotificationTemplateServiceImplTest {
 
         when(repository.existsByTemplateKey("WELCOME_EMAIL")).thenReturn(false);
         when(repository.save(any(NotificationTemplate.class))).thenReturn(savedTemplate);
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(versionRepository.findByTemplateIdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(mapper.toEntity(any(CreateNotificationTemplateRequest.class))).thenReturn(savedTemplate);
         when(mapper.toResponse(savedTemplate, "Notification template created successfully")).thenReturn(expectedResponse);
 
@@ -206,6 +221,9 @@ class NotificationTemplateServiceImplTest {
         when(repository.findById(id)).thenReturn(Optional.of(existingTemplate));
         when(mapper.updateEntity(request, existingTemplate)).thenReturn(updatedTemplate);
         when(repository.save(updatedTemplate)).thenReturn(updatedTemplate);
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(versionRepository.findByTemplateIdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(mapper.toResponse(updatedTemplate, "Notification template updated successfully")).thenReturn(expectedResponse);
 
         NotificationTemplateResponse response = service.updateTemplate(id, request);
@@ -261,5 +279,56 @@ class NotificationTemplateServiceImplTest {
         assertThatThrownBy(() -> service.deleteTemplate(id))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Template not found");
+    }
+
+    @Test
+    void getVariablesReturnsActiveVersionVariables() {
+        UUID id = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder().id(id).build();
+        NotificationTemplateVersion version = NotificationTemplateVersion.builder()
+                .id(UUID.randomUUID())
+                .template(template)
+                .active(true)
+                .versionNumber(1)
+                .subject("Welcome {{name}}")
+                .body("OTP {{otp}}")
+                .build();
+        version.setVariables(List.of(
+                TemplateVariable.builder().variableName("name").build(),
+                TemplateVariable.builder().variableName("otp").build()));
+
+        when(repository.findById(id)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplateIdAndActiveTrue(id)).thenReturn(Optional.of(version));
+
+        List<String> variables = service.getVariables(id);
+
+        assertThat(variables).containsExactly("name", "otp");
+    }
+
+    @Test
+    void renderTemplateRendersProvidedVariablesAndIgnoresExtras() {
+        UUID id = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder().id(id).build();
+        NotificationTemplateVersion version = NotificationTemplateVersion.builder()
+                .id(UUID.randomUUID())
+                .template(template)
+                .active(true)
+                .versionNumber(1)
+                .subject("Welcome {{name}}")
+                .body("Hello {{name}}. OTP is {{otp}}.")
+                .build();
+
+        RenderTemplateRequest request = new RenderTemplateRequest();
+        request.setVariables(java.util.Map.of("name", "Anjali", "otp", "483912", "city", "Delhi"));
+
+        version.setVariables(List.of());
+
+        when(repository.findById(id)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplateIdAndActiveTrue(id)).thenReturn(Optional.of(version));
+
+        RenderTemplateResponse response = service.renderTemplate(id, request);
+
+        assertThat(response.getSubject()).isEqualTo("Welcome Anjali");
+        assertThat(response.getBody()).isEqualTo("Hello Anjali. OTP is 483912.");
     }
 }
