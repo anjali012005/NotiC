@@ -1,6 +1,7 @@
 package io.github.anjali.notifyflow.management.mapper;
 
 import java.util.HashSet;
+import java.util.List;
 
 import org.springframework.stereotype.Component;
 
@@ -8,6 +9,8 @@ import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemp
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
+import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
+import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 
 @Component
 public class NotificationTemplateMapper {
@@ -50,5 +53,19 @@ public class NotificationTemplateMapper {
             existingTemplate.setTags(new HashSet<>(request.getTags()));
         }
         return existingTemplate;
+    }
+
+    public NotificationTemplateVersionResponse toVersionResponse(NotificationTemplateVersion version) {
+        return NotificationTemplateVersionResponse.builder()
+                .versionNumber(version.getVersionNumber())
+                .subject(version.getSubject())
+                .body(version.getBody())
+                .active(version.isActive())
+                .createdAt(version.getCreatedAt())
+                .updatedAt(version.getUpdatedAt())
+                .variables(version.getVariables() == null ? List.of() : version.getVariables().stream()
+                        .map(v -> v.getVariableName())
+                        .toList())
+                .build();
     }
 }

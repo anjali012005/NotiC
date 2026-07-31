@@ -67,6 +67,9 @@ public class NotificationTemplate {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "active_version")
+    private Integer activeVersion;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

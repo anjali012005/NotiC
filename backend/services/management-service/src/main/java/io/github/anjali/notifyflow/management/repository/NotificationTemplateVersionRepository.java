@@ -14,4 +14,8 @@ public interface NotificationTemplateVersionRepository
     Optional<NotificationTemplateVersion> findByTemplate_IdAndActiveTrue(UUID templateId);
 
     List<NotificationTemplateVersion> findByTemplate_IdOrderByVersionNumberDesc(UUID templateId);
+
+    List<NotificationTemplateVersion> findByTemplate_IdAndActiveTrueOrderByVersionNumberDesc(UUID templateId);
+
+    Optional<NotificationTemplateVersion> findByTemplate_IdAndVersionNumber(UUID templateId, Integer versionNumber);
 }

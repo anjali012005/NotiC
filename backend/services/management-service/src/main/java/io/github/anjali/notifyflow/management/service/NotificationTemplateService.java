@@ -33,4 +33,8 @@ public interface NotificationTemplateService {
     RenderTemplateResponse renderTemplate(UUID templateId, RenderTemplateRequest request);
 
     NotificationTemplateResponse createVersion(UUID templateId, CreateTemplateVersionRequest request);
+
+    java.util.List<io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse> getVersions(UUID templateId);
+
+    io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse getVersion(UUID templateId, Integer versionNumber);
 }

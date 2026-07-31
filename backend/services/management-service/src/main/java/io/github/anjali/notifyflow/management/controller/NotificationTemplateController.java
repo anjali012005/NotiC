@@ -85,6 +85,18 @@ public class NotificationTemplateController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @GetMapping("/{id}/versions")
+    public ResponseEntity<java.util.List<io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse>> getVersions(@PathVariable UUID id) {
+        java.util.List<io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse> response = notificationTemplateService.getVersions(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/versions/{version}")
+    public ResponseEntity<io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse> getVersion(@PathVariable UUID id, @PathVariable Integer version) {
+        io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse response = notificationTemplateService.getVersion(id, version);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/{id}/variables")
     public ResponseEntity<List<String>> getVariables(@PathVariable UUID id) {
         List<String> response = notificationTemplateService.getVariables(id);
