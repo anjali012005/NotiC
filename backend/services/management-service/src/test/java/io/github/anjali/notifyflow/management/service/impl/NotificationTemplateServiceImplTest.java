@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.request.CreateTemplateVersionRequest;
 import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
@@ -85,7 +87,7 @@ class NotificationTemplateServiceImplTest {
         when(repository.existsByTemplateKey("WELCOME_EMAIL")).thenReturn(false);
         when(repository.save(any(NotificationTemplate.class))).thenReturn(savedTemplate);
         when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(versionRepository.findByTemplateIdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
+        when(versionRepository.findByTemplate_IdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
         when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(mapper.toEntity(any(CreateNotificationTemplateRequest.class))).thenReturn(savedTemplate);
         when(mapper.toResponse(savedTemplate, "Notification template created successfully")).thenReturn(expectedResponse);
@@ -111,6 +113,52 @@ class NotificationTemplateServiceImplTest {
         assertThatThrownBy(() -> service.createTemplate(request))
                 .isInstanceOf(DuplicateTemplateKeyException.class)
                 .hasMessageContaining("already exists");
+    }
+
+    @Test
+    void createVersionCopiesRequiredTemplateFieldsIntoVersion() {
+        UUID templateId = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder()
+                .id(templateId)
+                .templateKey("WELCOME_EMAIL")
+                .name("Welcome Email")
+                .channel(NotificationChannel.EMAIL)
+                .subject("Welcome to NotifyFlow")
+                .body("Hi {{name}}, welcome!")
+                .build();
+
+        CreateTemplateVersionRequest request = new CreateTemplateVersionRequest();
+        request.setSubject("Welcome to NotifyFlow v2");
+        request.setBody("Hi {{name}}, welcome v2!");
+
+        NotificationTemplateResponse expectedResponse = NotificationTemplateResponse.builder()
+                .id(templateId)
+                .message("Template version created successfully")
+                .build();
+
+        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplate_IdOrderByVersionNumberDesc(templateId)).thenReturn(List.of());
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mapper.toResponse(template, "Template version created successfully")).thenReturn(expectedResponse);
+
+        NotificationTemplateResponse response = service.createVersion(templateId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(templateId);
+        assertThat(response.getMessage()).contains("created successfully");
+
+        ArgumentCaptor<NotificationTemplateVersion> versionCaptor = ArgumentCaptor.forClass(NotificationTemplateVersion.class);
+        verify(versionRepository).save(versionCaptor.capture());
+        NotificationTemplateVersion savedVersion = versionCaptor.getValue();
+
+        assertThat(savedVersion.getVersionNumber()).isEqualTo(1);
+        assertThat(savedVersion.getVersion()).isEqualTo(1);
+        assertThat(savedVersion.getChannel()).isEqualTo(NotificationChannel.EMAIL);
+        assertThat(savedVersion.getName()).isEqualTo("Welcome Email");
+        assertThat(savedVersion.getSubject()).isEqualTo("Welcome to NotifyFlow v2");
+        assertThat(savedVersion.getBody()).isEqualTo("Hi {{name}}, welcome v2!");
+        assertThat(savedVersion.isActive()).isTrue();
     }
 
     @Test
@@ -222,7 +270,7 @@ class NotificationTemplateServiceImplTest {
         when(mapper.updateEntity(request, existingTemplate)).thenReturn(updatedTemplate);
         when(repository.save(updatedTemplate)).thenReturn(updatedTemplate);
         when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(versionRepository.findByTemplateIdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
+        when(versionRepository.findByTemplate_IdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
         when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(mapper.toResponse(updatedTemplate, "Notification template updated successfully")).thenReturn(expectedResponse);
 
@@ -298,7 +346,7 @@ class NotificationTemplateServiceImplTest {
                 TemplateVariable.builder().variableName("otp").build()));
 
         when(repository.findById(id)).thenReturn(Optional.of(template));
-        when(versionRepository.findByTemplateIdAndActiveTrue(id)).thenReturn(Optional.of(version));
+        when(versionRepository.findByTemplate_IdAndActiveTrue(id)).thenReturn(Optional.of(version));
 
         List<String> variables = service.getVariables(id);
 
@@ -324,7 +372,7 @@ class NotificationTemplateServiceImplTest {
         version.setVariables(List.of());
 
         when(repository.findById(id)).thenReturn(Optional.of(template));
-        when(versionRepository.findByTemplateIdAndActiveTrue(id)).thenReturn(Optional.of(version));
+        when(versionRepository.findByTemplate_IdAndActiveTrue(id)).thenReturn(Optional.of(version));
 
         RenderTemplateResponse response = service.renderTemplate(id, request);
 

@@ -238,7 +238,10 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
 
         NotificationTemplateVersion version = NotificationTemplateVersion.builder()
             .template(template)
+            .version(nextVersionNumber)
             .versionNumber(nextVersionNumber)
+            .channel(template.getChannel())
+            .name(template.getName())
             .subject(subject)
             .body(body)
             .active(active)

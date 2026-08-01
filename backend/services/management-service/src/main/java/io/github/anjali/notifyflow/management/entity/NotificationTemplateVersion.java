@@ -5,9 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -41,8 +44,18 @@ public class NotificationTemplateVersion {
     @JoinColumn(name = "template_id", nullable = false)
     private NotificationTemplate template;
 
-    @Column(nullable = false)
+    @Column(name = "version", nullable = false)
+    private Integer version;
+
+    @Column(name = "version_number", nullable = false)
     private Integer versionNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private NotificationChannel channel;
+
+    @Column(nullable = false, length = 100)
+    private String name;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String subject;
