@@ -248,6 +248,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
             .build();
 
         NotificationTemplateVersion savedVersion = versionRepository.save(version);
+        NotificationTemplateVersion persistedVersion = savedVersion == null ? version : savedVersion;
 
         // update template convenience fields to reflect latest active content
         template.setSubject(subject);
@@ -256,7 +257,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
 
         List<TemplateVariable> variables = extractVariables(subject, body).stream()
                 .map(variableName -> TemplateVariable.builder()
-                        .version(savedVersion)
+                        .version(persistedVersion)
                         .variableName(variableName)
                         .build())
                 .toList();
@@ -265,50 +266,34 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
             variableRepository.saveAll(variables);
         }
 
-        savedVersion.setVariables(new ArrayList<>(variables));
-        return savedVersion;
+        persistedVersion.setVariables(new ArrayList<>(variables));
+        return persistedVersion;
     }
 
     private void validateTemplateContent(String subject, String body) {
-        Set<String> seen = new LinkedHashSet<>();
-        for (String content : List.of(subject, body)) {
-            if (content == null) {
-                continue;
-            }
-
-            Matcher matcher = VARIABLE_PATTERN.matcher(content);
-            while (matcher.find()) {
-                String placeholder = matcher.group(1);
-                if (!placeholder.matches(VARIABLE_NAME_PATTERN)) {
-                    throw new InvalidTemplateVariableException("Invalid variable placeholder: " + placeholder);
-                }
-                if (!seen.add(placeholder)) {
-                    throw new InvalidTemplateVariableException("Duplicate variable placeholder: " + placeholder);
-                }
-            }
-
-            if (content.contains("{{") && !content.contains("}}")) {
-                throw new InvalidTemplateVariableException("Invalid variable placeholder");
-            }
-        }
+        extractVariables(subject, body);
     }
 
     private Set<String> extractVariables(String subject, String body) {
         Set<String> variables = new LinkedHashSet<>();
+        Pattern placeholderPattern = Pattern.compile("\\{\\{\\s*([^{}]+?)\\s*\\}\\}");
+
         for (String content : List.of(subject, body)) {
             if (content == null) {
                 continue;
             }
 
-            Matcher matcher = VARIABLE_PATTERN.matcher(content);
+            Matcher matcher = placeholderPattern.matcher(content);
             while (matcher.find()) {
-                String placeholder = matcher.group(1);
+                String placeholder = matcher.group(1).trim();
                 if (!placeholder.matches(VARIABLE_NAME_PATTERN)) {
                     throw new InvalidTemplateVariableException("Invalid variable placeholder: " + placeholder);
                 }
-                if (!variables.add(placeholder)) {
-                    throw new InvalidTemplateVariableException("Duplicate variable placeholder: " + placeholder);
-                }
+                variables.add(placeholder);
+            }
+
+            if (content.contains("{{") && !content.contains("}}")) {
+                throw new InvalidTemplateVariableException("Invalid variable placeholder");
             }
         }
         return variables;

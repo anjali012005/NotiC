@@ -162,6 +162,47 @@ class NotificationTemplateServiceImplTest {
     }
 
     @Test
+    void createVersionAllowsSameVariableToBeUsedMultipleTimesAcrossTemplate() {
+        UUID templateId = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder()
+                .id(templateId)
+                .templateKey("WELCOME_EMAIL")
+                .name("Welcome Email")
+                .channel(NotificationChannel.EMAIL)
+                .subject("Welcome to NotifyFlow")
+                .body("Hi {{name}}, welcome!")
+                .build();
+
+        CreateTemplateVersionRequest request = new CreateTemplateVersionRequest();
+        request.setSubject("Hello {{name}}!");
+        request.setBody("Welcome {{name}} and your code is {{code}}.");
+
+        NotificationTemplateResponse expectedResponse = NotificationTemplateResponse.builder()
+                .id(templateId)
+                .message("Template version created successfully")
+                .build();
+
+        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplate_IdOrderByVersionNumberDesc(templateId)).thenReturn(List.of());
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.save(template)).thenReturn(template);
+        when(mapper.toResponse(template, "Template version created successfully")).thenReturn(expectedResponse);
+
+        NotificationTemplateResponse response = service.createVersion(templateId, request);
+
+        assertThat(response).isNotNull();
+
+        ArgumentCaptor<NotificationTemplateVersion> versionCaptor = ArgumentCaptor.forClass(NotificationTemplateVersion.class);
+        verify(versionRepository).save(versionCaptor.capture());
+        NotificationTemplateVersion savedVersion = versionCaptor.getValue();
+
+        assertThat(savedVersion.getVariables())
+                .extracting(TemplateVariable::getVariableName)
+                .containsExactly("name", "code");
+    }
+
+    @Test
     void getTemplateByIdReturnsTemplateWhenFound() {
         UUID id = UUID.randomUUID();
         NotificationTemplate template = NotificationTemplate.builder()
@@ -351,6 +392,56 @@ class NotificationTemplateServiceImplTest {
         List<String> variables = service.getVariables(id);
 
         assertThat(variables).containsExactly("name", "otp");
+    }
+
+    @Test
+    void renderTemplateAllowsEmptyVariableMapWhenNoPlaceholdersAreRequired() {
+        UUID id = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder().id(id).build();
+        NotificationTemplateVersion version = NotificationTemplateVersion.builder()
+                .id(UUID.randomUUID())
+                .template(template)
+                .active(true)
+                .versionNumber(1)
+                .subject("Welcome")
+                .body("This template has no variables.")
+                .build();
+
+        RenderTemplateRequest request = new RenderTemplateRequest();
+        request.setVariables(java.util.Map.of());
+
+        version.setVariables(List.of());
+
+        when(repository.findById(id)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplate_IdAndActiveTrue(id)).thenReturn(Optional.of(version));
+
+        RenderTemplateResponse response = service.renderTemplate(id, request);
+
+        assertThat(response.getSubject()).isEqualTo("Welcome");
+        assertThat(response.getBody()).isEqualTo("This template has no variables.");
+    }
+
+    @Test
+    void createVersionRejectsMalformedPlaceholderSyntax() {
+        UUID templateId = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder()
+                .id(templateId)
+                .templateKey("WELCOME_EMAIL")
+                .name("Welcome Email")
+                .channel(NotificationChannel.EMAIL)
+                .subject("Welcome")
+                .body("Hello")
+                .build();
+
+        CreateTemplateVersionRequest request = new CreateTemplateVersionRequest();
+        request.setSubject("Hello {{name}} {{bad-name}}");
+        request.setBody("Hi there");
+
+        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+
+        assertThatThrownBy(() -> service.createVersion(templateId, request))
+                .isInstanceOf(io.github.anjali.notifyflow.management.exception.InvalidTemplateVariableException.class)
+                .hasMessageContaining("Invalid variable placeholder");
     }
 
     @Test
