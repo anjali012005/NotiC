@@ -16,11 +16,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.request.CreateTemplateVersionRequest;
+import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
+import io.github.anjali.notifyflow.management.dto.response.RenderTemplateResponse;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import jakarta.validation.Valid;
@@ -85,6 +88,26 @@ public class NotificationTemplateController {
     @DeleteMapping("/{id}")
     public ResponseEntity<MessageResponse> deleteTemplate(@PathVariable UUID id) {
         MessageResponse response = notificationTemplateService.deleteTemplate(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/versions")
+    public ResponseEntity<NotificationTemplateResponse> createVersion(@PathVariable UUID id,
+            @Valid @RequestBody CreateTemplateVersionRequest request) {
+        NotificationTemplateResponse response = notificationTemplateService.createVersion(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{id}/variables")
+    public ResponseEntity<List<String>> getVariables(@PathVariable UUID id) {
+        List<String> response = notificationTemplateService.getVariables(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/render")
+    public ResponseEntity<RenderTemplateResponse> renderTemplate(@PathVariable UUID id,
+            @Valid @RequestBody RenderTemplateRequest request) {
+        RenderTemplateResponse response = notificationTemplateService.renderTemplate(id, request);
         return ResponseEntity.ok(response);
     }
 }

@@ -1,6 +1,7 @@
 package io.github.anjali.notifyflow.management.mapper;
 
 import java.util.HashSet;
+import java.util.List;
 
 import org.springframework.stereotype.Component;
 
@@ -43,14 +44,17 @@ public class NotificationTemplateMapper {
                 .build();
     }
 
-    public NotificationTemplate updateEntity(UpdateNotificationTemplateRequest request, NotificationTemplate existingTemplate) {
+    public NotificationTemplate updateEntity(UpdateNotificationTemplateRequest request,
+                                             NotificationTemplate existingTemplate) {
         existingTemplate.setName(request.getName());
         existingTemplate.setChannel(request.getChannel());
         existingTemplate.setSubject(request.getSubject());
         existingTemplate.setBody(request.getBody());
+
         if (request.getTags() != null) {
             existingTemplate.setTags(new HashSet<>(request.getTags()));
         }
+
         return existingTemplate;
     }
 
@@ -58,24 +62,41 @@ public class NotificationTemplateMapper {
         return NotificationTemplateVersionResponse.builder()
                 .id(version.getId())
                 .version(version.getVersion())
+                .versionNumber(version.getVersionNumber())
                 .name(version.getName())
                 .channel(version.getChannel())
                 .subject(version.getSubject())
                 .body(version.getBody())
                 .tags(version.getTags())
+                .active(version.isActive())
                 .createdAt(version.getCreatedAt())
+                .updatedAt(version.getUpdatedAt())
+                .variables(
+                        version.getVariables() == null
+                                ? List.of()
+                                : version.getVariables().stream()
+                                        .map(v -> v.getVariableName())
+                                        .toList())
                 .build();
     }
 
-    public NotificationTemplateVersion toVersionEntity(NotificationTemplate template, Integer versionNumber, NotificationTemplate existingTemplate) {
+    public NotificationTemplateVersion toVersionEntity(
+            NotificationTemplate template,
+            Integer versionNumber,
+            NotificationTemplate existingTemplate) {
+
         return NotificationTemplateVersion.builder()
                 .template(template)
                 .version(versionNumber)
+                .versionNumber(versionNumber)
                 .name(existingTemplate.getName())
                 .channel(existingTemplate.getChannel())
                 .subject(existingTemplate.getSubject())
                 .body(existingTemplate.getBody())
-                .tags(existingTemplate.getTags() != null ? new HashSet<>(existingTemplate.getTags()) : new HashSet<>())
+                .tags(existingTemplate.getTags() != null
+                        ? new HashSet<>(existingTemplate.getTags())
+                        : new HashSet<>())
+                .active(true)
                 .build();
     }
 }

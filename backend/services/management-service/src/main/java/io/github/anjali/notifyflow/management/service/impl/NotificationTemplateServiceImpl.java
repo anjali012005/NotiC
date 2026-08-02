@@ -1,7 +1,14 @@
 package io.github.anjali.notifyflow.management.service.impl;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -11,19 +18,27 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.request.CreateTemplateVersionRequest;
+import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
+import io.github.anjali.notifyflow.management.dto.response.RenderTemplateResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
+import io.github.anjali.notifyflow.management.entity.TemplateVariable;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.exception.DuplicateTemplateKeyException;
+import io.github.anjali.notifyflow.management.exception.InvalidTemplateVariableException;
+import io.github.anjali.notifyflow.management.exception.MissingRequiredVariableException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationTemplateMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
+
+import io.github.anjali.notifyflow.management.repository.TemplateVariableRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import lombok.RequiredArgsConstructor;
 
@@ -31,8 +46,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class NotificationTemplateServiceImpl implements NotificationTemplateService {
 
+    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{\\{\\s*([a-zA-Z][a-zA-Z0-9_]*)\\s*\\}\\}");
+    private static final String VARIABLE_NAME_PATTERN = "[a-zA-Z][a-zA-Z0-9_]*";
+
     private final NotificationTemplateRepository repository;
     private final NotificationTemplateVersionRepository versionRepository;
+
+    private final TemplateVariableRepository variableRepository;
     private final NotificationTemplateMapper mapper;
 
     @Override
@@ -43,12 +63,11 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         }
 
         NotificationTemplate template = mapper.toEntity(request);
-        template.setActiveVersion(1);
         NotificationTemplate savedTemplate = repository.save(template);
 
-        NotificationTemplateVersion initialVersion = mapper.toVersionEntity(savedTemplate, 1, savedTemplate);
-        versionRepository.save(initialVersion);
-
+        NotificationTemplateVersion created = createVersion(savedTemplate, request.getSubject(), request.getBody(), true);
+        savedTemplate.setActiveVersion(created.getVersionNumber());
+        repository.save(savedTemplate);
         return mapper.toResponse(savedTemplate, "Notification template created successfully");
     }
 
@@ -109,13 +128,11 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
 
         NotificationTemplate updatedTemplate = mapper.updateEntity(request, existingTemplate);
-        int nextVersion = existingTemplate.getActiveVersion() == null ? 1 : existingTemplate.getActiveVersion() + 1;
-        updatedTemplate.setActiveVersion(nextVersion);
         NotificationTemplate savedTemplate = repository.save(updatedTemplate);
 
-        NotificationTemplateVersion newVersion = mapper.toVersionEntity(savedTemplate, nextVersion, updatedTemplate);
-        versionRepository.save(newVersion);
-
+        NotificationTemplateVersion created = createVersion(savedTemplate, request.getSubject(), request.getBody(), true);
+        savedTemplate.setActiveVersion(created.getVersionNumber());
+        repository.save(savedTemplate);
         return mapper.toResponse(savedTemplate, "Notification template updated successfully");
     }
 
@@ -125,7 +142,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         NotificationTemplate template = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
 
-        return versionRepository.findByTemplateIdOrderByVersionDesc(template.getId()).stream()
+        return versionRepository.findByTemplate_IdOrderByVersionNumberDesc(template.getId()).stream()
                 .map(mapper::toVersionResponse)
                 .toList();
     }
@@ -136,7 +153,7 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         NotificationTemplate template = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
 
-        NotificationTemplateVersion templateVersion = versionRepository.findByTemplateIdAndVersion(template.getId(), version)
+        NotificationTemplateVersion templateVersion = versionRepository.findByTemplate_IdAndVersionNumber(template.getId(), version)
                 .orElseThrow(() -> new ResourceNotFoundException("Version not found for template " + id + " and version " + version));
 
         return mapper.toVersionResponse(templateVersion);
@@ -152,5 +169,179 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         return MessageResponse.builder()
                 .message("Notification template deleted successfully")
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public NotificationTemplateResponse createVersion(UUID templateId, CreateTemplateVersionRequest request) {
+        NotificationTemplate template = repository.findById(templateId)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+
+        NotificationTemplateVersion created = createVersion(template, request.getSubject(), request.getBody(), true);
+        template.setActiveVersion(created.getVersionNumber());
+        repository.save(template);
+        return mapper.toResponse(template, "Template version created successfully");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getVariables(UUID templateId) {
+        NotificationTemplate template = repository.findById(templateId)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+
+        NotificationTemplateVersion version = versionRepository.findByTemplate_IdAndActiveTrue(template.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("No active version found for template: " + templateId));
+
+        return version.getVariables().stream()
+                .map(TemplateVariable::getVariableName)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RenderTemplateResponse renderTemplate(UUID templateId, RenderTemplateRequest request) {
+        NotificationTemplate template = repository.findById(templateId)
+                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+
+        NotificationTemplateVersion version = versionRepository.findByTemplate_IdAndActiveTrue(template.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("No active version found for template: " + templateId));
+
+        Set<String> requiredVariables = version.getVariables().stream()
+                .map(TemplateVariable::getVariableName)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (request.getVariables() == null) {
+            throw new MissingRequiredVariableException("Missing required variable: " + requiredVariables.iterator().next());
+        }
+
+        for (String variableName : requiredVariables) {
+            if (!request.getVariables().containsKey(variableName)) {
+                throw new MissingRequiredVariableException("Missing required variable: " + variableName);
+            }
+        }
+
+        String renderedSubject = renderText(version.getSubject(), request.getVariables());
+        String renderedBody = renderText(version.getBody(), request.getVariables());
+
+        return RenderTemplateResponse.builder()
+                .subject(renderedSubject)
+                .body(renderedBody)
+                .build();
+    }
+
+        @Override
+        @Transactional(readOnly = true)
+        public List<io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse> getVersions(UUID templateId) {
+        NotificationTemplate template = repository.findById(templateId)
+            .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+
+        List<NotificationTemplateVersion> versions = versionRepository.findByTemplate_IdOrderByVersionNumberDesc(template.getId());
+        return versions.stream().map(mapper::toVersionResponse).toList();
+        }
+
+        @Override
+        @Transactional(readOnly = true)
+        public io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse getVersion(UUID templateId, Integer versionNumber) {
+        NotificationTemplate template = repository.findById(templateId)
+            .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+
+        NotificationTemplateVersion version = versionRepository.findByTemplate_IdAndVersionNumber(template.getId(), versionNumber)
+            .orElseThrow(() -> new ResourceNotFoundException("Version " + versionNumber + " not found for template: " + templateId));
+
+        return mapper.toVersionResponse(version);
+        }
+
+    private NotificationTemplateVersion createVersion(NotificationTemplate template, String subject, String body, boolean active) {
+        validateTemplateContent(subject, body);
+
+        deactivateExistingActiveVersions(template);
+
+        // determine next version number
+        int nextVersionNumber = 1;
+        List<NotificationTemplateVersion> existing = versionRepository.findByTemplate_IdOrderByVersionNumberDesc(template.getId());
+        if (existing != null && !existing.isEmpty()) {
+            nextVersionNumber = existing.get(0).getVersionNumber() + 1;
+        }
+
+        NotificationTemplateVersion version = NotificationTemplateVersion.builder()
+            .template(template)
+            .version(nextVersionNumber)
+            .versionNumber(nextVersionNumber)
+            .channel(template.getChannel())
+            .name(template.getName())
+            .subject(subject)
+            .body(body)
+            .active(active)
+            .build();
+
+        NotificationTemplateVersion savedVersion = versionRepository.save(version);
+        NotificationTemplateVersion persistedVersion = savedVersion == null ? version : savedVersion;
+
+        // update template convenience fields to reflect latest active content
+        template.setSubject(subject);
+        template.setBody(body);
+        repository.save(template);
+
+        List<TemplateVariable> variables = extractVariables(subject, body).stream()
+                .map(variableName -> TemplateVariable.builder()
+                        .version(persistedVersion)
+                        .variableName(variableName)
+                        .build())
+                .toList();
+
+        if (!variables.isEmpty()) {
+            variableRepository.saveAll(variables);
+        }
+
+        persistedVersion.setVariables(new ArrayList<>(variables));
+        return persistedVersion;
+    }
+
+    private void validateTemplateContent(String subject, String body) {
+        extractVariables(subject, body);
+    }
+
+    private Set<String> extractVariables(String subject, String body) {
+        Set<String> variables = new LinkedHashSet<>();
+        Pattern placeholderPattern = Pattern.compile("\\{\\{\\s*([^{}]+?)\\s*\\}\\}");
+
+        for (String content : List.of(subject, body)) {
+            if (content == null) {
+                continue;
+            }
+
+            Matcher matcher = placeholderPattern.matcher(content);
+            while (matcher.find()) {
+                String placeholder = matcher.group(1).trim();
+                if (!placeholder.matches(VARIABLE_NAME_PATTERN)) {
+                    throw new InvalidTemplateVariableException("Invalid variable placeholder: " + placeholder);
+                }
+                variables.add(placeholder);
+            }
+
+            if (content.contains("{{") && !content.contains("}}")) {
+                throw new InvalidTemplateVariableException("Invalid variable placeholder");
+            }
+        }
+        return variables;
+    }
+
+    private void deactivateExistingActiveVersions(NotificationTemplate template) {
+        List<NotificationTemplateVersion> activeVersions = versionRepository.findByTemplate_IdAndActiveTrueOrderByVersionNumberDesc(template.getId());
+        if (activeVersions == null || activeVersions.isEmpty()) {
+            return;
+        }
+        for (NotificationTemplateVersion version : activeVersions) {
+            version.setActive(false);
+        }
+        versionRepository.saveAll(activeVersions);
+    }
+
+    private String renderText(String content, Map<String, String> variables) {
+        String rendered = content == null ? "" : content;
+        for (Map.Entry<String, String> entry : variables.entrySet()) {
+            rendered = rendered.replace("{{" + entry.getKey() + "}}", entry.getValue());
+        }
+        return rendered;
     }
 }

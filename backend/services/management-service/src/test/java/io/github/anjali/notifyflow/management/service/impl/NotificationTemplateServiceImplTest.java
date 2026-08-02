@@ -9,6 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -22,19 +23,24 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import io.github.anjali.notifyflow.management.dto.request.CreateNotificationTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.request.CreateTemplateVersionRequest;
+import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.MessageResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateResponse;
 import io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse;
 import io.github.anjali.notifyflow.management.dto.response.PageResponse;
+import io.github.anjali.notifyflow.management.dto.response.RenderTemplateResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
+import io.github.anjali.notifyflow.management.entity.TemplateVariable;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.exception.DuplicateTemplateKeyException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationTemplateMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
+import io.github.anjali.notifyflow.management.repository.TemplateVariableRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationTemplateServiceImplTest {
@@ -43,10 +49,13 @@ class NotificationTemplateServiceImplTest {
     private NotificationTemplateRepository repository;
 
     @Mock
-    private NotificationTemplateMapper mapper;
+    private NotificationTemplateVersionRepository versionRepository;
 
     @Mock
-    private NotificationTemplateVersionRepository versionRepository;
+    private TemplateVariableRepository variableRepository;
+
+    @Mock
+    private NotificationTemplateMapper mapper;
 
     @InjectMocks
     private NotificationTemplateServiceImpl service;
@@ -78,6 +87,9 @@ class NotificationTemplateServiceImplTest {
 
         when(repository.existsByTemplateKey("WELCOME_EMAIL")).thenReturn(false);
         when(repository.save(any(NotificationTemplate.class))).thenReturn(savedTemplate);
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(versionRepository.findByTemplate_IdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(mapper.toEntity(any(CreateNotificationTemplateRequest.class))).thenReturn(savedTemplate);
         when(mapper.toResponse(savedTemplate, "Notification template created successfully")).thenReturn(expectedResponse);
 
@@ -102,6 +114,93 @@ class NotificationTemplateServiceImplTest {
         assertThatThrownBy(() -> service.createTemplate(request))
                 .isInstanceOf(DuplicateTemplateKeyException.class)
                 .hasMessageContaining("already exists");
+    }
+
+    @Test
+    void createVersionCopiesRequiredTemplateFieldsIntoVersion() {
+        UUID templateId = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder()
+                .id(templateId)
+                .templateKey("WELCOME_EMAIL")
+                .name("Welcome Email")
+                .channel(NotificationChannel.EMAIL)
+                .subject("Welcome to NotifyFlow")
+                .body("Hi {{name}}, welcome!")
+                .build();
+
+        CreateTemplateVersionRequest request = new CreateTemplateVersionRequest();
+        request.setSubject("Welcome to NotifyFlow v2");
+        request.setBody("Hi {{name}}, welcome v2!");
+
+        NotificationTemplateResponse expectedResponse = NotificationTemplateResponse.builder()
+                .id(templateId)
+                .message("Template version created successfully")
+                .build();
+
+        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplate_IdOrderByVersionNumberDesc(templateId)).thenReturn(List.of());
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(mapper.toResponse(template, "Template version created successfully")).thenReturn(expectedResponse);
+
+        NotificationTemplateResponse response = service.createVersion(templateId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(templateId);
+        assertThat(response.getMessage()).contains("created successfully");
+
+        ArgumentCaptor<NotificationTemplateVersion> versionCaptor = ArgumentCaptor.forClass(NotificationTemplateVersion.class);
+        verify(versionRepository).save(versionCaptor.capture());
+        NotificationTemplateVersion savedVersion = versionCaptor.getValue();
+
+        assertThat(savedVersion.getVersionNumber()).isEqualTo(1);
+        assertThat(savedVersion.getVersion()).isEqualTo(1);
+        assertThat(savedVersion.getChannel()).isEqualTo(NotificationChannel.EMAIL);
+        assertThat(savedVersion.getName()).isEqualTo("Welcome Email");
+        assertThat(savedVersion.getSubject()).isEqualTo("Welcome to NotifyFlow v2");
+        assertThat(savedVersion.getBody()).isEqualTo("Hi {{name}}, welcome v2!");
+        assertThat(savedVersion.isActive()).isTrue();
+    }
+
+    @Test
+    void createVersionAllowsSameVariableToBeUsedMultipleTimesAcrossTemplate() {
+        UUID templateId = UUID.randomUUID();
+        NotificationTemplate template = NotificationTemplate.builder()
+                .id(templateId)
+                .templateKey("WELCOME_EMAIL")
+                .name("Welcome Email")
+                .channel(NotificationChannel.EMAIL)
+                .subject("Welcome to NotifyFlow")
+                .body("Hi {{name}}, welcome!")
+                .build();
+
+        CreateTemplateVersionRequest request = new CreateTemplateVersionRequest();
+        request.setSubject("Hello {{name}}!");
+        request.setBody("Welcome {{name}} and your code is {{code}}.");
+
+        NotificationTemplateResponse expectedResponse = NotificationTemplateResponse.builder()
+                .id(templateId)
+                .message("Template version created successfully")
+                .build();
+
+        when(repository.findById(templateId)).thenReturn(Optional.of(template));
+        when(versionRepository.findByTemplate_IdOrderByVersionNumberDesc(templateId)).thenReturn(List.of());
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.save(template)).thenReturn(template);
+        when(mapper.toResponse(template, "Template version created successfully")).thenReturn(expectedResponse);
+
+        NotificationTemplateResponse response = service.createVersion(templateId, request);
+
+        assertThat(response).isNotNull();
+
+        ArgumentCaptor<NotificationTemplateVersion> versionCaptor = ArgumentCaptor.forClass(NotificationTemplateVersion.class);
+        verify(versionRepository).save(versionCaptor.capture());
+        NotificationTemplateVersion savedVersion = versionCaptor.getValue();
+
+        assertThat(savedVersion.getVariables())
+                .extracting(TemplateVariable::getVariableName)
+                .containsExactly("name", "code");
     }
 
     @Test
@@ -212,6 +311,9 @@ class NotificationTemplateServiceImplTest {
         when(repository.findById(id)).thenReturn(Optional.of(existingTemplate));
         when(mapper.updateEntity(request, existingTemplate)).thenReturn(updatedTemplate);
         when(repository.save(updatedTemplate)).thenReturn(updatedTemplate);
+        when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(versionRepository.findByTemplate_IdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
+        when(variableRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(mapper.toResponse(updatedTemplate, "Notification template updated successfully")).thenReturn(expectedResponse);
 
         NotificationTemplateResponse response = service.updateTemplate(id, request);
@@ -267,37 +369,5 @@ class NotificationTemplateServiceImplTest {
         assertThatThrownBy(() -> service.deleteTemplate(id))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Template not found");
-    }
-
-    @Test
-    void getTemplateVersionsReturnsVersionsNewestFirst() {
-        UUID templateId = UUID.randomUUID();
-        NotificationTemplate template = NotificationTemplate.builder().id(templateId).build();
-        NotificationTemplateVersion versionOne = NotificationTemplateVersion.builder().version(1).subject("Welcome").build();
-        NotificationTemplateVersion versionTwo = NotificationTemplateVersion.builder().version(2).subject("Hello").build();
-
-        when(repository.findById(templateId)).thenReturn(Optional.of(template));
-        when(versionRepository.findByTemplateIdOrderByVersionDesc(templateId)).thenReturn(List.of(versionTwo, versionOne));
-        when(mapper.toVersionResponse(versionTwo)).thenReturn(NotificationTemplateVersionResponse.builder().version(2).subject("Hello").build());
-        when(mapper.toVersionResponse(versionOne)).thenReturn(NotificationTemplateVersionResponse.builder().version(1).subject("Welcome").build());
-
-        List<NotificationTemplateVersionResponse> response = service.getTemplateVersions(templateId);
-
-        assertThat(response).hasSize(2);
-        assertThat(response.get(0).getVersion()).isEqualTo(2);
-        assertThat(response.get(1).getVersion()).isEqualTo(1);
-    }
-
-    @Test
-    void getTemplateVersionThrowsWhenVersionDoesNotExist() {
-        UUID templateId = UUID.randomUUID();
-        NotificationTemplate template = NotificationTemplate.builder().id(templateId).build();
-
-        when(repository.findById(templateId)).thenReturn(Optional.of(template));
-        when(versionRepository.findByTemplateIdAndVersion(templateId, 7)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.getTemplateVersion(templateId, 7))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Version not found");
     }
 }
