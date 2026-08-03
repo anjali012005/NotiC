@@ -41,6 +41,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
+    @ExceptionHandler(DuplicateProviderException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateProvider(DuplicateProviderException ex, HttpServletRequest request) {
+        Map<String, Object> body = buildErrorBody(HttpStatus.CONFLICT, ex.getMessage(), null, request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
         Map<String, Object> body = buildErrorBody(HttpStatus.NOT_FOUND, ex.getMessage(), null, request.getRequestURI());

@@ -1,0 +1,183 @@
+{
+    "info": {
+        "name": "NotifyFlow - Provider Management",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Create Provider",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"SendGrid\",\n  \"channel\": \"EMAIL\",\n  \"providerType\": \"SENDGRID\",\n  \"config\": \"{\\\"apiKey\\\":\\\"x\\\"}\",\n  \"enabled\": true,\n  \"isDefault\": true\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Get Providers",
+            "request": {
+                "method": "GET",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers?channel=EMAIL&enabled=true",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers"
+                    ],
+                    "query": [
+                        {
+                            "key": "channel",
+                            "value": "EMAIL"
+                        },
+                        {
+                            "key": "enabled",
+                            "value": "true"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Get Provider By Id",
+            "request": {
+                "method": "GET",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/:id",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        ":id"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Update Provider",
+            "request": {
+                "method": "PUT",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"SendGrid\",\n  \"channel\": \"EMAIL\",\n  \"providerType\": \"SENDGRID\",\n  \"config\": \"{\\\"apiKey\\\":\\\"updated\\\"}\",\n  \"enabled\": true,\n  \"isDefault\": true\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/:id",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        ":id"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Enable Provider",
+            "request": {
+                "method": "PATCH",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/:id/enable",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        ":id",
+                        "enable"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Disable Provider",
+            "request": {
+                "method": "PATCH",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/:id/disable",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        ":id",
+                        "disable"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Mark Provider Default",
+            "request": {
+                "method": "PATCH",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/:id/default",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        ":id",
+                        "default"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "Delete Provider",
+            "request": {
+                "method": "DELETE",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/:id",
+                    "host": [
+                        "http://localhost:8081"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        ":id"
+                    ]
+                }
+            }
+        }
+    ]
+}
