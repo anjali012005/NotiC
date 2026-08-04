@@ -1,0 +1,38 @@
+{
+    "info": {
+        "name": "NotifyFlow Sprint 7 - Notification Dispatch",
+        "description": "Collection for testing the notification dispatch engine endpoint",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Send Notification",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"templateKey\": \"WELCOME_EMAIL\",\n  \"recipient\": \"user@example.com\",\n  \"variables\": {\n    \"name\": \"Jane\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8080/api/v1/notifications/send",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8080",
+                    "path": [
+                        "api",
+                        "v1",
+                        "notifications",
+                        "send"
+                    ]
+                }
+            }
+        }
+    ]
+}
