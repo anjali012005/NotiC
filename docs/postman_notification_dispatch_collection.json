@@ -6,7 +6,7 @@
     },
     "item": [
         {
-            "name": "Send Notification",
+            "name": "Send EMAIL Notification",
             "request": {
                 "method": "POST",
                 "header": [
@@ -32,7 +32,338 @@
                         "send"
                     ]
                 }
-            }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 200', function () {",
+                            "    pm.response.to.have.status(200);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Send SMS Notification",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"templateKey\": \"WELCOME_SMS\",\n  \"recipient\": \"+15551234567\",\n  \"variables\": {\n    \"code\": \"123456\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8080/api/v1/notifications/send",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8080",
+                    "path": [
+                        "api",
+                        "v1",
+                        "notifications",
+                        "send"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 200', function () {",
+                            "    pm.response.to.have.status(200);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Send PUSH Notification",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"templateKey\": \"WELCOME_PUSH\",\n  \"recipient\": \"device-token-abc123\",\n  \"variables\": {\n    \"title\": \"Alert\",\n    \"message\": \"You have a new notification\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8080/api/v1/notifications/send",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8080",
+                    "path": [
+                        "api",
+                        "v1",
+                        "notifications",
+                        "send"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 200', function () {",
+                            "    pm.response.to.have.status(200);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Send Notification With Missing Variable",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"templateKey\": \"WELCOME_EMAIL\",\n  \"recipient\": \"user@example.com\",\n  \"variables\": {}\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8080/api/v1/notifications/send",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8080",
+                    "path": [
+                        "api",
+                        "v1",
+                        "notifications",
+                        "send"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 400', function () {",
+                            "    pm.response.to.have.status(400);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Send Notification With Unknown Template",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"templateKey\": \"UNKNOWN_TEMPLATE\",\n  \"recipient\": \"user@example.com\",\n  \"variables\": {\n    \"name\": \"Jane\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8080/api/v1/notifications/send",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8080",
+                    "path": [
+                        "api",
+                        "v1",
+                        "notifications",
+                        "send"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 404', function () {",
+                            "    pm.response.to.have.status(404);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Disable Default Provider",
+            "request": {
+                "method": "PATCH",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/{{defaultProviderId}}/disable",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8081",
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        "{{defaultProviderId}}",
+                        "disable"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 200', function () {",
+                            "    pm.response.to.have.status(200);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Send Notification When Default Provider Is Disabled",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"templateKey\": \"WELCOME_EMAIL\",\n  \"recipient\": \"user@example.com\",\n  \"variables\": {\n    \"name\": \"Jane\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8080/api/v1/notifications/send",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8080",
+                    "path": [
+                        "api",
+                        "v1",
+                        "notifications",
+                        "send"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code indicates provider disabled', function () {",
+                            "    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Mark Alternate Provider Default",
+            "request": {
+                "method": "PATCH",
+                "url": {
+                    "raw": "http://localhost:8081/api/v1/providers/{{alternateProviderId}}/default",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8081",
+                    "path": [
+                        "api",
+                        "v1",
+                        "providers",
+                        "{{alternateProviderId}}",
+                        "default"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 200', function () {",
+                            "    pm.response.to.have.status(200);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Send Notification After Default Provider Switch",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"templateKey\": \"WELCOME_EMAIL\",\n  \"recipient\": \"user@example.com\",\n  \"variables\": {\n    \"name\": \"Jane\"\n  }\n}"
+                },
+                "url": {
+                    "raw": "http://localhost:8080/api/v1/notifications/send",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "8080",
+                    "path": [
+                        "api",
+                        "v1",
+                        "notifications",
+                        "send"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Status code is 200', function () {",
+                            "    pm.response.to.have.status(200);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
         }
     ]
 }
