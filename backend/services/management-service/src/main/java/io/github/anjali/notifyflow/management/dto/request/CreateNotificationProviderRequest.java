@@ -1,5 +1,7 @@
 package io.github.anjali.notifyflow.management.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
 import jakarta.validation.constraints.NotBlank;
@@ -27,5 +29,6 @@ public class CreateNotificationProviderRequest {
 
     private boolean enabled;
 
+    @JsonProperty("isDefault")
     private boolean isDefault;
 }

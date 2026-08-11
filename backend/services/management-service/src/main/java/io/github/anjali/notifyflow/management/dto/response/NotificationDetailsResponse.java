@@ -3,10 +3,8 @@ package io.github.anjali.notifyflow.management.dto.response;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
-import io.github.anjali.notifyflow.management.enums.ProviderType;
+import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,18 +16,22 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class NotificationProviderResponse {
+public class NotificationDetailsResponse {
+
     private UUID id;
-    private String name;
+    private UUID templateId;
+    private UUID templateVersionId;
+    private String templateKey;
+    private String recipient;
     private NotificationChannel channel;
-    private ProviderType providerType;
-    private String config;
-    private boolean enabled;
-
-    @JsonProperty("isDefault")
-    private boolean isDefault;
-
+    private UUID providerId;
+    private String providerName;
+    private String subject;
+    private String body;
+    private NotificationDeliveryStatus status;
+    private Integer retryCount;
+    private String failureReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private String message;
+    private LocalDateTime sentAt;
 }

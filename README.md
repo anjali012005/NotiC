@@ -14,4 +14,4 @@ Centralized Notification Infrastructure for Modern Applications.
 
 ## Status
 
-Sprint 0 – Product Discovery
+Sprint 8 – Notification Reliability & Tracking (Completed)

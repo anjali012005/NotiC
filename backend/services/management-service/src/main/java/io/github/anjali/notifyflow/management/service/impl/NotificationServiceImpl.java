@@ -11,16 +11,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.github.anjali.notifyflow.management.dto.request.SendNotificationRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationResponse;
+import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
 import io.github.anjali.notifyflow.management.entity.TemplateVariable;
+import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.exception.MissingRequiredVariableException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.service.NotificationService;
+import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +36,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationTemplateVersionRepository versionRepository;
     private final NotificationProviderRepository providerRepository;
     private final NotificationDispatcherFactory dispatcherFactory;
+    private final NotificationTrackingService trackingService;
 
     @Override
     @Transactional
@@ -55,19 +59,45 @@ public class NotificationServiceImpl implements NotificationService {
             throw new ResourceNotFoundException("Provider is not enabled: " + provider.getName());
         }
 
-        NotificationDispatcher dispatcher = dispatcherFactory.resolveDispatcher(provider);
-        dispatcher.dispatch(provider, request.getRecipient(), renderedSubject, renderedBody);
+        Notification notification = trackingService.createNotification(
+                template.getId(),
+                activeVersion.getId(),
+                template.getTemplateKey(),
+                request.getRecipient(),
+                template.getChannel(),
+                provider.getId(),
+                provider.getName(),
+                renderedSubject,
+                renderedBody
+        );
 
-        return NotificationResponse.builder()
-                .id(template.getId())
-                .templateKey(template.getTemplateKey())
-                .recipient(request.getRecipient())
-                .subject(renderedSubject)
-                .body(renderedBody)
-                .providerName(provider.getName())
-                .providerType(provider.getProviderType().name())
-                .message("Notification dispatched successfully")
-                .build();
+        trackingService.updateNotificationStatus(notification.getId(), NotificationDeliveryStatus.PROCESSING);
+
+        try {
+            NotificationDispatcher dispatcher = dispatcherFactory.resolveDispatcher(provider);
+            dispatcher.dispatch(provider, request.getRecipient(), renderedSubject, renderedBody);
+
+            trackingService.updateNotificationStatus(notification.getId(), NotificationDeliveryStatus.SENT);
+            trackingService.setSentAt(notification.getId());
+
+            return NotificationResponse.builder()
+                    .notificationId(notification.getId())
+                    .status(NotificationDeliveryStatus.SENT)
+                    .message("Notification sent successfully")
+                    .build();
+        } catch (Exception e) {
+            trackingService.updateNotificationStatusWithFailure(
+                    notification.getId(),
+                    NotificationDeliveryStatus.FAILED,
+                    "Provider dispatch failed: " + e.getMessage()
+            );
+
+            return NotificationResponse.builder()
+                    .notificationId(notification.getId())
+                    .status(NotificationDeliveryStatus.FAILED)
+                    .message("Notification delivery failed")
+                    .build();
+        }
     }
 
     private void validateRequiredVariables(NotificationTemplateVersion version, Map<String, String> variables) {

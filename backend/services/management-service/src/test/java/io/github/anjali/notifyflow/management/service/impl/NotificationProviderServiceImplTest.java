@@ -78,4 +78,42 @@ class NotificationProviderServiceImplTest {
                 .isInstanceOf(DuplicateProviderException.class)
                 .hasMessageContaining("already exists");
     }
+
+    @Test
+    void createProvider_shouldPersistIsDefaultTrue() {
+        when(repository.existsByChannelAndName(NotificationChannel.EMAIL, "SendGrid")).thenReturn(false);
+        when(repository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.empty());
+        when(repository.save(any(NotificationProvider.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateNotificationProviderRequest request = new CreateNotificationProviderRequest();
+        request.setName("SendGrid");
+        request.setChannel(NotificationChannel.EMAIL);
+        request.setProviderType(ProviderType.SENDGRID);
+        request.setConfig("{\"apiKey\":\"x\"}");
+        request.setEnabled(true);
+        request.setDefault(true);
+
+        NotificationProviderResponse response = service.createProvider(request);
+
+        assertThat(response.isDefault()).isTrue();
+    }
+
+    @Test
+    void createProvider_shouldPersistIsDefaultFalse() {
+        when(repository.existsByChannelAndName(NotificationChannel.EMAIL, "SendGrid")).thenReturn(false);
+        when(repository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.empty());
+        when(repository.save(any(NotificationProvider.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateNotificationProviderRequest request = new CreateNotificationProviderRequest();
+        request.setName("SendGrid");
+        request.setChannel(NotificationChannel.EMAIL);
+        request.setProviderType(ProviderType.SENDGRID);
+        request.setConfig("{\"apiKey\":\"x\"}");
+        request.setEnabled(true);
+        request.setDefault(false);
+
+        NotificationProviderResponse response = service.createProvider(request);
+
+        assertThat(response.isDefault()).isFalse();
+    }
 }

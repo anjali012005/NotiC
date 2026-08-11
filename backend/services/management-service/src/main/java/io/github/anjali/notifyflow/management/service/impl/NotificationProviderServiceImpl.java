@@ -32,24 +32,13 @@ public class NotificationProviderServiceImpl implements NotificationProviderServ
     public NotificationProviderResponse createProvider(CreateNotificationProviderRequest request) {
         validateUniqueName(request.getChannel(), request.getName());
 
-        System.out.println("Request isDefault = " + request.isDefault());
-
         NotificationProvider provider = mapper.toEntity(request);
-
-        System.out.println("Mapped isDefault = " + provider.isDefault());
-
 
         if (provider.isDefault()) {
             clearDefaultForChannel(provider.getChannel());
         }
-        System.out.println("Before Save: " + provider.isDefault());
-
 
         NotificationProvider saved = repository.save(provider);
-
-        System.out.println("Saved isDefault = " + saved.isDefault());
-
-        System.out.println("After Save: " + saved.isDefault());
 
         return mapper.toResponse(saved, "Notification provider created successfully");
     }

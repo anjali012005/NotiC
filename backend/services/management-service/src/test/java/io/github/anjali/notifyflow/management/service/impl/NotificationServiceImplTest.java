@@ -20,17 +20,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.github.anjali.notifyflow.management.dto.request.SendNotificationRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationResponse;
+import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
 import io.github.anjali.notifyflow.management.entity.TemplateVariable;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
+import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
 import io.github.anjali.notifyflow.management.exception.MissingRequiredVariableException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
+import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
 
@@ -48,6 +51,9 @@ class NotificationServiceImplTest {
 
     @Mock
     private NotificationDispatcherFactory dispatcherFactory;
+
+    @Mock
+    private NotificationTrackingService trackingService;
 
     @InjectMocks
     private NotificationServiceImpl service;
@@ -81,6 +87,21 @@ class NotificationServiceImplTest {
                 .isDefault(true)
                 .build();
 
+        Notification notification = Notification.builder()
+                .id(UUID.randomUUID())
+                .templateId(template.getId())
+                .templateVersionId(version.getId())
+                .templateKey("WELCOME_EMAIL")
+                .recipient("user@example.com")
+                .channel(NotificationChannel.EMAIL)
+                .providerId(provider.getId())
+                .providerName("Mailgun")
+                .subject("Hello Jane")
+                .body("Hi Jane")
+                .status(NotificationDeliveryStatus.QUEUED)
+                .retryCount(0)
+                .build();
+
         SendNotificationRequest request = new SendNotificationRequest();
         request.setTemplateKey("WELCOME_EMAIL");
         request.setRecipient("user@example.com");
@@ -97,14 +118,16 @@ class NotificationServiceImplTest {
         when(versionRepository.findByTemplate_IdAndActiveTrue(template.getId())).thenReturn(Optional.of(version));
         when(providerRepository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.of(provider));
         when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
+        when(trackingService.createNotification(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(notification);
+        when(trackingService.updateNotificationStatus(any(), any())).thenReturn(notification);
+        when(trackingService.setSentAt(any())).thenReturn(notification);
 
         NotificationResponse response = service.sendNotification(request);
 
         assertThat(response).isNotNull();
-        assertThat(response.getTemplateKey()).isEqualTo("WELCOME_EMAIL");
-        assertThat(response.getRecipient()).isEqualTo("user@example.com");
-        assertThat(response.getSubject()).isEqualTo("Hello Jane");
-        assertThat(response.getBody()).isEqualTo("Hi Jane");
+        assertThat(response.getNotificationId()).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(NotificationDeliveryStatus.SENT);
+        assertThat(response.getMessage()).isEqualTo("Notification sent successfully");
     }
 
     @Test
