@@ -1,28 +1,25 @@
 package io.github.anjali.notifyflow.management.service.impl;
 
-import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import io.github.anjali.notifyflow.management.dto.request.SendNotificationRequest;
+import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationResponse;
+import io.github.anjali.notifyflow.management.dto.response.RenderTemplateResponse;
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
-import io.github.anjali.notifyflow.management.entity.TemplateVariable;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
-import io.github.anjali.notifyflow.management.exception.MissingRequiredVariableException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.service.NotificationService;
+import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
@@ -37,6 +34,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationProviderRepository providerRepository;
     private final NotificationDispatcherFactory dispatcherFactory;
     private final NotificationTrackingService trackingService;
+    private final NotificationTemplateService templateService;
 
     @Override
     @Transactional
@@ -47,10 +45,9 @@ public class NotificationServiceImpl implements NotificationService {
         NotificationTemplateVersion activeVersion = versionRepository.findByTemplate_IdAndActiveTrue(template.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("No active version found for template: " + template.getTemplateKey()));
 
-        validateRequiredVariables(activeVersion, request.getVariables());
-
-        String renderedSubject = renderText(activeVersion.getSubject(), request.getVariables());
-        String renderedBody = renderText(activeVersion.getBody(), request.getVariables());
+        RenderTemplateRequest renderRequest = new RenderTemplateRequest();
+        renderRequest.setVariables(request.getVariables());
+        RenderTemplateResponse renderedTemplate = templateService.renderTemplate(template.getId(), renderRequest);
 
         NotificationProvider provider = providerRepository.findByChannelAndIsDefaultTrue(template.getChannel())
                 .orElseThrow(() -> new ResourceNotFoundException("Default provider not found for channel: " + template.getChannel()));
@@ -67,15 +64,15 @@ public class NotificationServiceImpl implements NotificationService {
                 template.getChannel(),
                 provider.getId(),
                 provider.getName(),
-                renderedSubject,
-                renderedBody
+                renderedTemplate.getSubject(),
+                renderedTemplate.getBody()
         );
 
         trackingService.updateNotificationStatus(notification.getId(), NotificationDeliveryStatus.PROCESSING);
 
         try {
             NotificationDispatcher dispatcher = dispatcherFactory.resolveDispatcher(provider);
-            dispatcher.dispatch(provider, request.getRecipient(), renderedSubject, renderedBody);
+            dispatcher.dispatch(provider, request.getRecipient(), renderedTemplate.getSubject(), renderedTemplate.getBody());
 
             trackingService.updateNotificationStatus(notification.getId(), NotificationDeliveryStatus.SENT);
             trackingService.setSentAt(notification.getId());
@@ -100,36 +97,4 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
-    private void validateRequiredVariables(NotificationTemplateVersion version, Map<String, String> variables) {
-        Set<String> requiredVariables = version.getVariables() == null ? Set.of() : version.getVariables().stream()
-                .filter(Objects::nonNull)
-                .map(TemplateVariable::getVariableName)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        if (requiredVariables.isEmpty()) {
-            return;
-        }
-
-        if (variables == null) {
-            throw new MissingRequiredVariableException("Missing required variable: " + requiredVariables.iterator().next());
-        }
-
-        for (String variableName : requiredVariables) {
-            if (!variables.containsKey(variableName)) {
-                throw new MissingRequiredVariableException("Missing required variable: " + variableName);
-            }
-        }
-    }
-
-    private String renderText(String content, Map<String, String> variables) {
-        String rendered = content == null ? "" : content;
-        if (variables == null) {
-            return rendered;
-        }
-        for (Map.Entry<String, String> entry : variables.entrySet()) {
-            rendered = rendered.replace("{{" + entry.getKey() + "}}", entry.getValue());
-        }
-        return rendered;
-    }
 }

@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import io.github.anjali.notifyflow.management.dto.request.SendNotificationRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationResponse;
+import io.github.anjali.notifyflow.management.dto.response.RenderTemplateResponse;
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
@@ -28,12 +29,12 @@ import io.github.anjali.notifyflow.management.entity.TemplateVariable;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
-import io.github.anjali.notifyflow.management.exception.MissingRequiredVariableException;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
+import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
 
@@ -54,6 +55,9 @@ class NotificationServiceImplTest {
 
     @Mock
     private NotificationTrackingService trackingService;
+
+    @Mock
+    private NotificationTemplateService templateService;
 
     @InjectMocks
     private NotificationServiceImpl service;
@@ -116,6 +120,8 @@ class NotificationServiceImplTest {
 
         when(templateRepository.findByTemplateKey("WELCOME_EMAIL")).thenReturn(Optional.of(template));
         when(versionRepository.findByTemplate_IdAndActiveTrue(template.getId())).thenReturn(Optional.of(version));
+        when(templateService.renderTemplate(any(), any())).thenReturn(RenderTemplateResponse.builder()
+                .subject("Hello Jane").body("Hi Jane").build());
         when(providerRepository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.of(provider));
         when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
         when(trackingService.createNotification(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(notification);
@@ -179,7 +185,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void sendNotificationThrowsWhenVariablesMissing() {
+    void sendNotificationPropagatesRenderingValidationFailure() {
         NotificationTemplate template = NotificationTemplate.builder()
                 .id(UUID.randomUUID())
                 .templateKey("WELCOME_EMAIL")
@@ -198,15 +204,6 @@ class NotificationServiceImplTest {
                 .variables(List.of(TemplateVariable.builder().variableName("name").build()))
                 .build();
 
-        NotificationProvider provider = NotificationProvider.builder()
-                .id(UUID.randomUUID())
-                .name("Mailgun")
-                .channel(NotificationChannel.EMAIL)
-                .providerType(ProviderType.SMTP)
-                .enabled(true)
-                .isDefault(true)
-                .build();
-
         SendNotificationRequest request = new SendNotificationRequest();
         request.setTemplateKey("WELCOME_EMAIL");
         request.setRecipient("user@example.com");
@@ -214,9 +211,10 @@ class NotificationServiceImplTest {
 
         when(templateRepository.findByTemplateKey("WELCOME_EMAIL")).thenReturn(Optional.of(template));
         when(versionRepository.findByTemplate_IdAndActiveTrue(template.getId())).thenReturn(Optional.of(version));
+        when(templateService.renderTemplate(any(), any())).thenThrow(new io.github.anjali.notifyflow.management.exception.MissingRequiredVariableException("Missing required variable: name"));
 
         assertThatThrownBy(() -> service.sendNotification(request))
-                .isInstanceOf(MissingRequiredVariableException.class)
+                .isInstanceOf(io.github.anjali.notifyflow.management.exception.MissingRequiredVariableException.class)
                 .hasMessageContaining("name");
     }
 }

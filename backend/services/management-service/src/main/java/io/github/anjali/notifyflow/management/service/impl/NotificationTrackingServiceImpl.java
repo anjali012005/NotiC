@@ -13,7 +13,6 @@ import io.github.anjali.notifyflow.management.dto.response.NotificationDetailsRe
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
-import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
@@ -21,7 +20,6 @@ import io.github.anjali.notifyflow.management.mapper.NotificationMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
-import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
@@ -33,7 +31,6 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
 
     private final NotificationRepository notificationRepository;
     private final NotificationTemplateRepository templateRepository;
-    private final NotificationTemplateVersionRepository versionRepository;
     private final NotificationProviderRepository providerRepository;
     private final NotificationDispatcherFactory dispatcherFactory;
     private final NotificationMapper notificationMapper;
@@ -92,6 +89,7 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
     public Notification setSentAt(UUID notificationId) {
         Notification notification = findByIdOrThrow(notificationId);
         notification.setSentAt(LocalDateTime.now());
+        notification.setFailureReason(null);
         return notificationRepository.save(notification);
     }
 

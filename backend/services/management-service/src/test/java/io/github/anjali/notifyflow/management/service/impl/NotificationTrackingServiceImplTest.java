@@ -23,7 +23,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
-import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
@@ -31,8 +30,6 @@ import io.github.anjali.notifyflow.management.exception.ResourceNotFoundExceptio
 import io.github.anjali.notifyflow.management.mapper.NotificationMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
-import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
-import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
 
@@ -43,12 +40,6 @@ class NotificationTrackingServiceImplTest {
     private NotificationRepository notificationRepository;
 
     @Mock
-    private NotificationTemplateRepository templateRepository;
-
-    @Mock
-    private NotificationTemplateVersionRepository versionRepository;
-
-    @Mock
     private NotificationProviderRepository providerRepository;
 
     @Mock
@@ -56,6 +47,9 @@ class NotificationTrackingServiceImplTest {
 
     @Mock
     private NotificationMapper notificationMapper;
+
+    @Mock
+    private io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository templateRepository;
 
     @InjectMocks
     private NotificationTrackingServiceImpl trackingService;
@@ -141,6 +135,7 @@ class NotificationTrackingServiceImplTest {
                 .id(notificationId)
                 .status(NotificationDeliveryStatus.FAILED)
                 .retryCount(1)
+                .failureReason("Previous attempt timed out")
                 .build();
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
@@ -203,10 +198,6 @@ class NotificationTrackingServiceImplTest {
                 .retryCount(1)
                 .build();
 
-        NotificationTemplate template = NotificationTemplate.builder()
-                .id(templateId)
-                .build();
-
         NotificationProvider provider = NotificationProvider.builder()
                 .id(providerId)
                 .enabled(true)
@@ -220,10 +211,10 @@ class NotificationTrackingServiceImplTest {
         };
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(io.github.anjali.notifyflow.management.entity.NotificationTemplate.builder().id(templateId).build()));
         when(providerRepository.findById(providerId)).thenReturn(Optional.of(provider));
         when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
-        when(notificationRepository.save(any(Notification.class))).thenReturn(notification);
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         boolean result = trackingService.retryNotification(notificationId);
 
@@ -296,17 +287,13 @@ class NotificationTrackingServiceImplTest {
                 .retryCount(1)
                 .build();
 
-        NotificationTemplate template = NotificationTemplate.builder()
-                .id(templateId)
-                .build();
-
         NotificationProvider provider = NotificationProvider.builder()
                 .id(providerId)
                 .enabled(false)
                 .build();
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(templateRepository.findById(templateId)).thenReturn(Optional.of(template));
+        when(templateRepository.findById(templateId)).thenReturn(Optional.of(io.github.anjali.notifyflow.management.entity.NotificationTemplate.builder().id(templateId).build()));
         when(providerRepository.findById(providerId)).thenReturn(Optional.of(provider));
         when(notificationRepository.save(any(Notification.class))).thenReturn(notification);
 
