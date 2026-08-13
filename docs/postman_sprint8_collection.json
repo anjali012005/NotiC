@@ -1,0 +1,503 @@
+{
+  "info": {
+    "name": "NotifyFlow Sprint 8 - Notification Reliability & Tracking",
+    "description": "Postman collection for Sprint 8 manual verification including notification tracking, retry mechanism, and provider bug fix testing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Provider Management (Bug Fix Test)",
+      "item": [
+        {
+          "name": "Create Provider with isDefault=true",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TestSendGrid\",\n  \"channel\": \"EMAIL\",\n  \"providerType\": \"SENDGRID\",\n  \"config\": \"{\\\"apiKey\\\":\\\"SG.test123\\\"}\",\n  \"enabled\": true,\n  \"isDefault\": true\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8081/api/v1/providers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "providers"]
+            },
+            "description": "Test the isDefault boolean bug fix. This should persist is_default=true in PostgreSQL and return isDefault:true in response."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Provider with isDefault=false",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TestMailgun\",\n  \"channel\": \"EMAIL\",\n  \"providerType\": \"SMTP\",\n  \"config\": \"{\\\"host\\\":\\\"smtp.mailgun.org\\\",\\\"port\\\":587}\",\n  \"enabled\": true,\n  \"isDefault\": false\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8081/api/v1/providers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "providers"]
+            },
+            "description": "Test that isDefault=false is also persisted correctly."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification Sending (Tracking Integration)",
+      "item": [
+        {
+          "name": "Send Notification - Success Case",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateKey\": \"WELCOME_EMAIL\",\n  \"recipient\": \"user@example.com\",\n  \"variables\": {\n    \"name\": \"Jane Doe\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications", "send"]
+            },
+            "description": "Send a notification and verify it returns notificationId and status. The notification should be persisted with status SENT."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Notification - Template Not Found",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateKey\": \"NONEXISTENT_TEMPLATE\",\n  \"recipient\": \"user@example.com\",\n  \"variables\": {}\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications/send",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications", "send"]
+            },
+            "description": "Test error handling when template doesn't exist."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification History & Tracking",
+      "item": [
+        {
+          "name": "Get Notification by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications/{{notificationId}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications", "{{notificationId}}"]
+            },
+            "description": "Retrieve a specific notification by its UUID. Replace {{notificationId}} with actual ID from send response. Verify all fields are populated correctly including provider, template, version, and status."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification by ID - Not Found",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications/00000000-0000-0000-0000-000000000000",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "Test 404 response for non-existent notification."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification List & Filtering",
+      "item": [
+        {
+          "name": "List All Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications?page=0&size=10&sortBy=createdAt&sortDirection=desc",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortDirection",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "List all notifications with pagination and sorting."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Status - SENT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications?status=SENT&page=0&size=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SENT"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Filter notifications by SENT status."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Status - FAILED",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications?status=FAILED&page=0&size=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "FAILED"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Filter notifications by FAILED status to find retry candidates."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Channel - EMAIL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications?channel=EMAIL&page=0&size=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "EMAIL"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Filter notifications by EMAIL channel."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Recipient",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications?recipient=user@example.com&page=0&size=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                {
+                  "key": "recipient",
+                  "value": "user@example.com"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Filter notifications by recipient email (partial match)."
+          },
+          "response": []
+        },
+        {
+          "name": "Filter by Provider Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications?providerName=SendGrid&page=0&size=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                {
+                  "key": "providerName",
+                  "value": "SendGrid"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Filter notifications by provider name."
+          },
+          "response": []
+        },
+        {
+          "name": "Combined Filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications?status=SENT&channel=EMAIL&providerName=SendGrid&page=0&size=10",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SENT"
+                },
+                {
+                  "key": "channel",
+                  "value": "EMAIL"
+                },
+                {
+                  "key": "providerName",
+                  "value": "SendGrid"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Apply multiple filters at once."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Retry Mechanism",
+      "item": [
+        {
+          "name": "Retry Failed Notification",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications/{{notificationId}}/retry",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications", "{{notificationId}}", "retry"]
+            },
+            "description": "Retry a failed notification. Replace {{notificationId}} with actual ID of a FAILED notification. Should increment retryCount and change status to SENT on success."
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Beyond Max Retries",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications/{{notificationId}}/retry",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications", "{{notificationId}}", "retry"]
+            },
+            "description": "Test retry when max retry count (3) is exceeded. Should return failure message."
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Non-FAILED Notification",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8081/api/v1/notifications/{{notificationId}}/retry",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "notifications", "{{notificationId}}", "retry"]
+            },
+            "description": "Test retry on a SENT notification. Should return failure message."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Template Setup (Prerequisites)",
+      "item": [
+        {
+          "name": "Create Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateKey\": \"WELCOME_EMAIL\",\n  \"name\": \"Welcome Email\",\n  \"channel\": \"EMAIL\",\n  \"subject\": \"Welcome {{name}}!\",\n  \"body\": \"Hello {{name}},\\n\\nWelcome to our platform!\",\n  \"tags\": [\"welcome\", \"onboarding\"]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8081/api/v1/templates",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "templates"]
+            },
+            "description": "Create a template to use for notification testing (prerequisite for send tests)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Template Version",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Welcome {{name}}!\",\n  \"body\": \"Hello {{name}},\\n\\nWelcome to our platform!\\n\\nBest regards,\\nThe Team\",\n  \"variables\": [\n    {\n      \"variableName\": \"name\",\n      \"description\": \"User's name\",\n      \"required\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8081/api/v1/templates/{{templateId}}/versions",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8081",
+              "path": ["api", "v1", "templates", "{{templateId}}", "versions"]
+            },
+            "description": "Create an active version for the template (prerequisite for send tests). Replace {{templateId}} with actual template ID."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "notificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "templateId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

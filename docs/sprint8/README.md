@@ -299,13 +299,44 @@ notification:
 
 ## 13. Postman Collection
 
-A Postman collection for Sprint 8 can be created with the following requests:
+A comprehensive Postman collection for Sprint 8 has been created at `docs/postman_sprint8_collection.json`.
 
-1. **Send Notification** - POST /api/v1/notifications/send
-2. **Get Notification by ID** - GET /api/v1/notifications/{id}
-3. **List Notifications** - GET /api/v1/notifications (with various filters)
-4. **Retry Notification** - POST /api/v1/notifications/{id}/retry
-5. **Create Provider with isDefault** - POST /api/v1/providers (to test bug fix)
+The collection includes:
+
+### Provider Management (Bug Fix Test)
+- Create Provider with isDefault=true
+- Create Provider with isDefault=false
+
+### Notification Sending (Tracking Integration)
+- Send Notification - Success Case
+- Send Notification - Template Not Found
+
+### Notification History & Tracking
+- Get Notification by ID
+- Get Notification by ID - Not Found
+
+### Notification List & Filtering
+- List All Notifications
+- Filter by Status - SENT
+- Filter by Status - FAILED
+- Filter by Channel - EMAIL
+- Filter by Recipient
+- Filter by Provider Name
+- Combined Filters
+
+### Retry Mechanism
+- Retry Failed Notification
+- Retry Beyond Max Retries
+- Retry Non-FAILED Notification
+
+### Template Setup (Prerequisites)
+- Create Template
+- Create Template Version
+
+**To use the collection:**
+1. Import `docs/postman_sprint8_collection.json` into Postman
+2. Set up environment variables for `notificationId` and `templateId` as needed
+3. Run requests in order: Template Setup → Provider Management → Notification Sending → Notification History → Retry Mechanism
 
 ## 14. Verification Steps
 
