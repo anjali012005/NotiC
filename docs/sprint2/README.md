@@ -1,5 +1,8 @@
 # Sprint 2 - Template Retrieval APIs
 
+# description of what have been building
+# for understanding
+
 ## 1. Folder structure
 
 backend/services/management-service/src/main/java/io/github/anjali/notifyflow/management/
