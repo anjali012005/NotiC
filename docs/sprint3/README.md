@@ -1,4 +1,5 @@
 # Sprint 3: Update and Delete Notification Templates
+# building notification template and making them useful for the tenant
 
 ## 1. Folder structure
 
