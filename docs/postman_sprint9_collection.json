@@ -1,0 +1,47 @@
+{
+  "info": {
+    "name": "NotifyFlow Sprint 9 - Provider Integration & Dispatch",
+    "description": "Import this collection to verify SendGrid provider configuration, dispatch, tracking and retry. Set sendgridApiKey or use SENDGRID_API_KEY on the service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create default SendGrid provider",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"name\": \"SendGrid Email\",\n  \"channel\": \"EMAIL\",\n  \"providerType\": \"SENDGRID\",\n  \"config\": \"{\\\"fromEmail\\\":\\\"{{fromEmail}}\\\",\\\"fromName\\\":\\\"NotifyFlow\\\",\\\"apiKey\\\":\\\"{{sendgridApiKey}}\\\"}\",\n  \"enabled\": true,\n  \"isDefault\": true\n}"},
+        "url": "{{baseUrl}}/api/v1/providers"
+      },
+      "response": []
+    },
+    {
+      "name": "Send notification",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"templateKey\": \"WELCOME_EMAIL\",\n  \"recipient\": \"{{recipient}}\",\n  \"variables\": {\"name\": \"Jane\"}\n}"},
+        "url": "{{baseUrl}}/api/v1/notifications/send"
+      },
+      "event": [{"listen": "test", "script": {"exec": ["const response = pm.response.json();", "if (response.notificationId) pm.collectionVariables.set('notificationId', response.notificationId);"]}}],
+      "response": []
+    },
+    {
+      "name": "Get tracked notification",
+      "request": {"method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/notifications/{{notificationId}}"},
+      "response": []
+    },
+    {
+      "name": "Retry failed notification",
+      "request": {"method": "POST", "header": [], "url": "{{baseUrl}}/api/v1/notifications/{{notificationId}}/retry"},
+      "response": []
+    }
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8081"},
+    {"key": "fromEmail", "value": "notifications@example.com"},
+    {"key": "sendgridApiKey", "value": ""},
+    {"key": "recipient", "value": "user@example.com"},
+    {"key": "notificationId", "value": ""}
+  ]
+}

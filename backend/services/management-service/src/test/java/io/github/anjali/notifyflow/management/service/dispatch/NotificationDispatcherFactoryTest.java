@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
+import io.github.anjali.notifyflow.management.exception.ProviderDispatchException;
 
 class NotificationDispatcherFactoryTest {
 
@@ -58,5 +59,29 @@ class NotificationDispatcherFactoryTest {
         NotificationDispatcher dispatcher = factory.resolveDispatcher(provider);
 
         assertThat(dispatcher).isInstanceOf(FirebaseDispatcher.class);
+    }
+
+    @Test
+    void rejectsProviderChannelMismatch() {
+        NotificationProvider provider = NotificationProvider.builder()
+                .providerType(ProviderType.SENDGRID)
+                .channel(NotificationChannel.SMS)
+                .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> factory.resolveDispatcher(provider))
+                .isInstanceOf(ProviderDispatchException.class)
+                .hasMessageContaining("does not support channel");
+    }
+
+    @Test
+    void rejectsProviderTypeWithoutAnAdapter() {
+        NotificationProvider provider = NotificationProvider.builder()
+                .providerType(ProviderType.AWS_SES)
+                .channel(NotificationChannel.EMAIL)
+                .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> factory.resolveDispatcher(provider))
+                .isInstanceOf(ProviderDispatchException.class)
+                .hasMessageContaining("Unsupported provider type");
     }
 }
