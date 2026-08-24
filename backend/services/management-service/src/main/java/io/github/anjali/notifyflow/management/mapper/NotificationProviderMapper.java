@@ -32,6 +32,7 @@ public class NotificationProviderMapper {
                 .channel(provider.getChannel())
                 .providerType(provider.getProviderType())
                 .config(provider.getConfig())
+                .configured(provider.getConfig() != null && !provider.getConfig().isBlank())
                 .enabled(provider.isEnabled())
                 .isDefault(provider.isDefault())
                 .createdAt(provider.getCreatedAt())
