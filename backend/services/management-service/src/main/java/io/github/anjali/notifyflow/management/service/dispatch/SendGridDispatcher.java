@@ -41,9 +41,25 @@ public class SendGridDispatcher implements NotificationDispatcher {
     @Override
     public void dispatch(NotificationProvider provider, String recipient, String subject, String body) {
         Map<String, String> config = parseConfig(provider.getConfig());
-        String apiKey = config.getOrDefault("apiKey", System.getenv("SENDGRID_API_KEY"));
+        // String apiKey = config.getOrDefault("apiKey", System.getenv("SENDGRID_API_KEY"));
+        String apiKey = config.get("apiKey");
+
+if (isBlank(apiKey)) {
+    apiKey = System.getenv("SENDGRID_API_KEY");
+}
         String fromEmail = config.get("fromEmail");
         String fromName = config.get("fromName");
+
+      
+System.out.println("===== SENDGRID DEBUG =====");
+System.out.println("Provider config present: " + (provider.getConfig() != null));
+System.out.println("fromEmail present: " + !isBlank(fromEmail));
+System.out.println("fromName present: " + !isBlank(fromName));
+System.out.println("API key present: " + !isBlank(apiKey));
+System.out.println("Environment API key present: "
+        + !isBlank(System.getenv("SENDGRID_API_KEY")));
+System.out.println("==========================");
+
         if (isBlank(apiKey) || isBlank(fromEmail)) {
             throw new ProviderDispatchException("SendGrid configuration requires fromEmail and an API key");
         }
