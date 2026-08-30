@@ -89,10 +89,14 @@ System.out.println("==========================");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ProviderDispatchException("SendGrid request was interrupted", e);
+        // } catch (Exception e) {
+        //     throw new ProviderDispatchException("SendGrid request failed", e);
+        // }
         } catch (Exception e) {
-            throw new ProviderDispatchException("SendGrid request failed", e);
-        }
-    }
+    e.printStackTrace();
+    throw new ProviderDispatchException(
+        "SendGrid request failed: " + e.getClass().getSimpleName() + " - " + e.getMessage(), e);
+    }}
 
     private Map<String, String> parseConfig(String rawConfig) {
         if (isBlank(rawConfig)) {
