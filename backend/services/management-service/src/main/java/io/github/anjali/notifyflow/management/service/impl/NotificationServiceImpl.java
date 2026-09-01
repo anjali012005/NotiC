@@ -21,8 +21,6 @@ import io.github.anjali.notifyflow.management.repository.NotificationTemplateVer
 import io.github.anjali.notifyflow.management.service.NotificationService;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
-import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
-import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -32,7 +30,6 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationTemplateRepository templateRepository;
     private final NotificationTemplateVersionRepository versionRepository;
     private final NotificationProviderRepository providerRepository;
-    private final NotificationDispatcherFactory dispatcherFactory;
     private final NotificationTrackingService trackingService;
     private final NotificationTemplateService templateService;
 
@@ -68,33 +65,12 @@ public class NotificationServiceImpl implements NotificationService {
                 renderedTemplate.getBody()
         );
 
-        trackingService.updateNotificationStatus(notification.getId(), NotificationDeliveryStatus.PROCESSING);
-
-        try {
-            NotificationDispatcher dispatcher = dispatcherFactory.resolveDispatcher(provider);
-            dispatcher.dispatch(provider, request.getRecipient(), renderedTemplate.getSubject(), renderedTemplate.getBody());
-
-            trackingService.updateNotificationStatus(notification.getId(), NotificationDeliveryStatus.SENT);
-            trackingService.setSentAt(notification.getId());
-
-            return NotificationResponse.builder()
-                    .notificationId(notification.getId())
-                    .status(NotificationDeliveryStatus.SENT)
-                    .message("Notification sent successfully")
-                    .build();
-        } catch (Exception e) {
-            trackingService.updateNotificationStatusWithFailure(
-                    notification.getId(),
-                    NotificationDeliveryStatus.FAILED,
-                    "Provider dispatch failed: " + e.getMessage()
-            );
-
-            return NotificationResponse.builder()
-                    .notificationId(notification.getId())
-                    .status(NotificationDeliveryStatus.FAILED)
-                    .message("Notification delivery failed")
-                    .build();
-        }
+        return NotificationResponse.builder()
+                .id(notification.getId())
+                .notificationId(notification.getId())
+                .status(NotificationDeliveryStatus.QUEUED)
+                .message("Notification accepted for processing")
+                .build();
     }
 
 }

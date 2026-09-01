@@ -31,6 +31,10 @@ management:
 
 notification:
   max-retry-count: 3
+  worker:
+    fixed-delay-ms: 5000
+    batch-size: 20
+    processing-timeout-minutes: 10
   providers:
     sendgrid:
       # Override with SENDGRID_BASE_URL for a local HTTP stub; keep credentials out of this file.

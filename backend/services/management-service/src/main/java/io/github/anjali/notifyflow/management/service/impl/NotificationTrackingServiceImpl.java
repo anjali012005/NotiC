@@ -12,17 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 import io.github.anjali.notifyflow.management.dto.response.NotificationDetailsResponse;
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
-import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
-import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
-import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
-import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -30,9 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class NotificationTrackingServiceImpl implements NotificationTrackingService {
 
     private final NotificationRepository notificationRepository;
-    private final NotificationTemplateRepository templateRepository;
     private final NotificationProviderRepository providerRepository;
-    private final NotificationDispatcherFactory dispatcherFactory;
     private final NotificationMapper notificationMapper;
 
     @Value("${notification.max-retry-count:3}")
@@ -121,9 +115,6 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
             return false;
         }
 
-        NotificationTemplate template = templateRepository.findById(notification.getTemplateId())
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found"));
-
         NotificationProvider provider = providerRepository.findById(notification.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
 
@@ -134,20 +125,29 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
         }
 
         incrementRetryCount(notificationId);
-        updateNotificationStatus(notificationId, NotificationDeliveryStatus.PROCESSING);
+        notification.setStatus(NotificationDeliveryStatus.QUEUED);
+        notification.setFailureReason(null);
+        notificationRepository.save(notification);
+        return true;
+    }
 
-        try {
-            NotificationDispatcher dispatcher = dispatcherFactory.resolveDispatcher(provider);
-            dispatcher.dispatch(provider, notification.getRecipient(), notification.getSubject(), notification.getBody());
+    @Override
+    @Transactional
+    public boolean claimQueuedNotification(UUID notificationId) {
+        return notificationRepository.claimQueuedNotification(
+                notificationId, NotificationDeliveryStatus.QUEUED, NotificationDeliveryStatus.PROCESSING) == 1;
+    }
 
-            updateNotificationStatus(notificationId, NotificationDeliveryStatus.SENT);
-            setSentAt(notificationId);
-            return true;
-        } catch (Exception e) {
-            updateNotificationStatusWithFailure(notificationId, NotificationDeliveryStatus.FAILED,
-                    "Retry failed: " + e.getMessage());
-            return false;
-        }
+    @Override
+    @Transactional
+    public void recoverStuckNotifications(LocalDateTime cutoff) {
+        String reason = "Processing lease expired; notification re-queued";
+        notificationRepository.failExhaustedStuckNotifications(
+                NotificationDeliveryStatus.PROCESSING, NotificationDeliveryStatus.FAILED,
+                cutoff, maxRetryCount, "Processing lease expired after maximum retries");
+        notificationRepository.requeueStuckNotifications(
+                NotificationDeliveryStatus.PROCESSING, NotificationDeliveryStatus.QUEUED,
+                cutoff, maxRetryCount, reason);
     }
 
     private Notification findByIdOrThrow(UUID id) {
