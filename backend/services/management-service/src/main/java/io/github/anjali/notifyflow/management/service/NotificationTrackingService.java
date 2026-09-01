@@ -1,6 +1,7 @@
 package io.github.anjali.notifyflow.management.service;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,4 +32,8 @@ public interface NotificationTrackingService {
                                                         String recipient, String providerName, Pageable pageable);
 
     boolean retryNotification(UUID notificationId);
+
+    boolean claimQueuedNotification(UUID notificationId);
+
+    void recoverStuckNotifications(LocalDateTime cutoff);
 }

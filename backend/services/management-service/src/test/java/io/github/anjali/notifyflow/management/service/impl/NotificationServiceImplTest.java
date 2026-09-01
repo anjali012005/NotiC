@@ -63,7 +63,7 @@ class NotificationServiceImplTest {
     private NotificationServiceImpl service;
 
     @Test
-    void sendNotificationDispatchesSuccessfully() {
+    void sendNotificationQueuesSuccessfully() {
         NotificationTemplate template = NotificationTemplate.builder()
                 .id(UUID.randomUUID())
                 .templateKey("WELCOME_EMAIL")
@@ -111,29 +111,19 @@ class NotificationServiceImplTest {
         request.setRecipient("user@example.com");
         request.setVariables(Map.of("name", "Jane"));
 
-        NotificationDispatcher dispatcher = new NotificationDispatcher() {
-            @Override
-            public void dispatch(NotificationProvider provider, String recipient, String subject, String body) {
-                // no-op for test
-            }
-        };
-
         when(templateRepository.findByTemplateKey("WELCOME_EMAIL")).thenReturn(Optional.of(template));
         when(versionRepository.findByTemplate_IdAndActiveTrue(template.getId())).thenReturn(Optional.of(version));
         when(templateService.renderTemplate(any(), any())).thenReturn(RenderTemplateResponse.builder()
                 .subject("Hello Jane").body("Hi Jane").build());
         when(providerRepository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.of(provider));
-        when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
         when(trackingService.createNotification(any(), any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(notification);
-        when(trackingService.updateNotificationStatus(any(), any())).thenReturn(notification);
-        when(trackingService.setSentAt(any())).thenReturn(notification);
 
         NotificationResponse response = service.sendNotification(request);
 
         assertThat(response).isNotNull();
-        assertThat(response.getNotificationId()).isNotNull();
-        assertThat(response.getStatus()).isEqualTo(NotificationDeliveryStatus.SENT);
-        assertThat(response.getMessage()).isEqualTo("Notification sent successfully");
+        assertThat(response.getId()).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(NotificationDeliveryStatus.QUEUED);
+        assertThat(response.getMessage()).isEqualTo("Notification accepted for processing");
     }
 
     @Test

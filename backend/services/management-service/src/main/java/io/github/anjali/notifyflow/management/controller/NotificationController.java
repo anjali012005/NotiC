@@ -7,6 +7,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,7 +38,7 @@ public class NotificationController {
 
     @PostMapping("/send")
     public ResponseEntity<NotificationResponse> sendNotification(@Valid @RequestBody SendNotificationRequest request) {
-        return ResponseEntity.ok(notificationService.sendNotification(request));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(notificationService.sendNotification(request));
     }
 
     @GetMapping("/{id}")
@@ -76,8 +77,8 @@ public class NotificationController {
     public ResponseEntity<MessageResponse> retryNotification(@PathVariable UUID id) {
         boolean success = trackingService.retryNotification(id);
         if (success) {
-            return ResponseEntity.ok(MessageResponse.builder()
-                    .message("Notification retry initiated successfully")
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(MessageResponse.builder()
+                    .message("Notification retry queued successfully")
                     .build());
         } else {
             return ResponseEntity.badRequest().body(MessageResponse.builder()

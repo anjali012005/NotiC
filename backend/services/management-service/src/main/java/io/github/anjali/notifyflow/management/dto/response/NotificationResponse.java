@@ -16,6 +16,8 @@ import lombok.Setter;
 @AllArgsConstructor
 public class NotificationResponse {
 
+    private UUID id;
+    /** @deprecated Use {@link #id}; retained for existing Sprint 9 clients. */
     private UUID notificationId;
     private NotificationDeliveryStatus status;
     private String message;
