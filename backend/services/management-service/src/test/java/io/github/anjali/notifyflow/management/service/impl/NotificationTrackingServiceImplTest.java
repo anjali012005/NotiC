@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -30,8 +31,6 @@ import io.github.anjali.notifyflow.management.exception.ResourceNotFoundExceptio
 import io.github.anjali.notifyflow.management.mapper.NotificationMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
-import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
-import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationTrackingServiceImplTest {
@@ -43,13 +42,7 @@ class NotificationTrackingServiceImplTest {
     private NotificationProviderRepository providerRepository;
 
     @Mock
-    private NotificationDispatcherFactory dispatcherFactory;
-
-    @Mock
     private NotificationMapper notificationMapper;
-
-    @Mock
-    private io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository templateRepository;
 
     @InjectMocks
     private NotificationTrackingServiceImpl trackingService;
@@ -147,6 +140,20 @@ class NotificationTrackingServiceImplTest {
     }
 
     @Test
+    void recoverStuckNotificationsFailsExhaustedWorkAndRequeuesOnlyWorkBelowTheRetryLimit() {
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(10);
+
+        trackingService.recoverStuckNotifications(cutoff);
+
+        verify(notificationRepository).failExhaustedStuckNotifications(
+                NotificationDeliveryStatus.PROCESSING, NotificationDeliveryStatus.FAILED,
+                cutoff, 3, "Processing lease expired after maximum retries");
+        verify(notificationRepository).requeueStuckNotifications(
+                NotificationDeliveryStatus.PROCESSING, NotificationDeliveryStatus.QUEUED,
+                cutoff, 3, "Processing lease expired; notification re-queued");
+    }
+
+    @Test
     void getNotificationByIdReturnsDetails() {
         UUID notificationId = UUID.randomUUID();
         Notification notification = Notification.builder()
@@ -203,17 +210,8 @@ class NotificationTrackingServiceImplTest {
                 .enabled(true)
                 .build();
 
-        NotificationDispatcher dispatcher = new NotificationDispatcher() {
-            @Override
-            public void dispatch(NotificationProvider provider, String recipient, String subject, String body) {
-                // no-op
-            }
-        };
-
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(templateRepository.findById(templateId)).thenReturn(Optional.of(io.github.anjali.notifyflow.management.entity.NotificationTemplate.builder().id(templateId).build()));
         when(providerRepository.findById(providerId)).thenReturn(Optional.of(provider));
-        when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
         when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         boolean result = trackingService.retryNotification(notificationId);
@@ -293,7 +291,6 @@ class NotificationTrackingServiceImplTest {
                 .build();
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(templateRepository.findById(templateId)).thenReturn(Optional.of(io.github.anjali.notifyflow.management.entity.NotificationTemplate.builder().id(templateId).build()));
         when(providerRepository.findById(providerId)).thenReturn(Optional.of(provider));
         when(notificationRepository.save(any(Notification.class))).thenReturn(notification);
 
