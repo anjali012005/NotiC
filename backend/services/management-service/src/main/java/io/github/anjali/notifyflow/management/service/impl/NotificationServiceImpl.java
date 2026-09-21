@@ -15,6 +15,7 @@ import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
+import io.github.anjali.notifyflow.management.messaging.NotificationEventPublisher;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
@@ -32,6 +33,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationProviderRepository providerRepository;
     private final NotificationTrackingService trackingService;
     private final NotificationTemplateService templateService;
+        private final NotificationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -64,6 +66,11 @@ public class NotificationServiceImpl implements NotificationService {
                 renderedTemplate.getSubject(),
                 renderedTemplate.getBody()
         );
+                try {
+                        eventPublisher.publishNotificationCreated(notification.getId());
+                } catch (RuntimeException exception) {
+                        // Reconciliation can recover a queued row if RabbitMQ is unavailable.
+                }
 
         return NotificationResponse.builder()
                 .id(notification.getId())

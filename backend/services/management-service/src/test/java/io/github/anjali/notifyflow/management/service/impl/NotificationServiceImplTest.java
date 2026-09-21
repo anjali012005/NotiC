@@ -30,6 +30,7 @@ import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
+import io.github.anjali.notifyflow.management.messaging.NotificationEventPublisher;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
@@ -58,6 +59,9 @@ class NotificationServiceImplTest {
 
     @Mock
     private NotificationTemplateService templateService;
+
+        @Mock
+        private NotificationEventPublisher eventPublisher;
 
     @InjectMocks
     private NotificationServiceImpl service;

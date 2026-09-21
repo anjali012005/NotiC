@@ -13,6 +13,12 @@ spring:
     username: postgres
     password: admin
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -39,3 +45,8 @@ notification:
     sendgrid:
       # Override with SENDGRID_BASE_URL for a local HTTP stub; keep credentials out of this file.
       base-url: ${SENDGRID_BASE_URL:https://api.sendgrid.com/v3/mail/send}
+  rabbitmq:
+    exchange: notifyflow.notifications
+    queue: notifyflow.notification-created
+    routing-key: notification.created
+    reconciliation-delay-ms: 60000

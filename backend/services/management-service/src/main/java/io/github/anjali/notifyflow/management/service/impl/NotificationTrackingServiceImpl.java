@@ -16,6 +16,7 @@ import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationMapper;
+import io.github.anjali.notifyflow.management.messaging.NotificationEventPublisher;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
@@ -28,6 +29,7 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
     private final NotificationRepository notificationRepository;
     private final NotificationProviderRepository providerRepository;
     private final NotificationMapper notificationMapper;
+    private final NotificationEventPublisher eventPublisher;
 
     @Value("${notification.max-retry-count:3}")
     private int maxRetryCount;
@@ -128,6 +130,11 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
         notification.setStatus(NotificationDeliveryStatus.QUEUED);
         notification.setFailureReason(null);
         notificationRepository.save(notification);
+        try {
+            eventPublisher.publishNotificationCreated(notificationId);
+        } catch (RuntimeException exception) {
+            // Reconciliation can recover the queued retry if RabbitMQ is unavailable.
+        }
         return true;
     }
 

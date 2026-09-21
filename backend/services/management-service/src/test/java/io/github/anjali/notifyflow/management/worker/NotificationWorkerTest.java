@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.rabbitmq.client.Channel;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +30,7 @@ import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
+import io.github.anjali.notifyflow.management.messaging.NotificationCreatedMessage;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
@@ -157,6 +160,26 @@ class NotificationWorkerTest {
         order.verify(trackingService).recoverStuckNotifications(any(LocalDateTime.class));
         order.verify(notificationRepository).findIdsByStatus(eq(NotificationDeliveryStatus.QUEUED), any(Pageable.class));
     }
+
+        @Test
+        void duplicateMessageDoesNotDispatchAfterNotificationWasAlreadyClaimed() throws Exception {
+                UUID notificationId = UUID.randomUUID();
+                NotificationCreatedMessage message = new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED");
+                Channel channel = org.mockito.Mockito.mock(Channel.class);
+
+                when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true, false);
+                when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(queuedNotification(notificationId)));
+                NotificationProvider provider = enabledProvider(notificationRepository.findById(notificationId).get().getProviderId());
+                when(providerRepository.findById(any())).thenReturn(Optional.of(provider));
+                when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
+
+                worker.consume(message, channel, 10L);
+                worker.consume(message, channel, 11L);
+
+                verify(dispatcher).dispatch(any(), any(), any(), any());
+                verify(channel).basicAck(10L, false);
+                verify(channel).basicAck(11L, false);
+        }
 
     private Notification queuedNotification(UUID notificationId) {
         UUID providerId = UUID.randomUUID();
