@@ -1,24 +1,26 @@
 package io.github.anjali.notifyflow.management.service.impl;
 
-import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import io.github.anjali.notifyflow.management.dto.request.SendNotificationRequest;
 import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
+import io.github.anjali.notifyflow.management.dto.request.SendNotificationRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationResponse;
 import io.github.anjali.notifyflow.management.dto.response.RenderTemplateResponse;
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplate;
 import io.github.anjali.notifyflow.management.entity.NotificationTemplateVersion;
+import io.github.anjali.notifyflow.management.entity.OutboxEvent;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
+import io.github.anjali.notifyflow.management.enums.OutboxEventStatus;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
-import io.github.anjali.notifyflow.management.messaging.NotificationEventPublisher;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
+import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
 import io.github.anjali.notifyflow.management.service.NotificationService;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
@@ -33,7 +35,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationProviderRepository providerRepository;
     private final NotificationTrackingService trackingService;
     private final NotificationTemplateService templateService;
-        private final NotificationEventPublisher eventPublisher;
+        private final OutboxEventRepository outboxEventRepository;
 
     @Override
     @Transactional
@@ -66,11 +68,7 @@ public class NotificationServiceImpl implements NotificationService {
                 renderedTemplate.getSubject(),
                 renderedTemplate.getBody()
         );
-                try {
-                        eventPublisher.publishNotificationCreated(notification.getId());
-                } catch (RuntimeException exception) {
-                        // Reconciliation can recover a queued row if RabbitMQ is unavailable.
-                }
+        outboxEventRepository.save(createNotificationCreatedEvent(notification.getId()));
 
         return NotificationResponse.builder()
                 .id(notification.getId())
@@ -79,5 +77,16 @@ public class NotificationServiceImpl implements NotificationService {
                 .message("Notification accepted for processing")
                 .build();
     }
+
+    private OutboxEvent createNotificationCreatedEvent(UUID notificationId) {
+        return OutboxEvent.builder()
+                .eventType("NOTIFICATION_CREATED")
+                .aggregateType("NOTIFICATION")
+                .aggregateId(notificationId)
+                .payload("{\"notificationId\":\"" + notificationId + "\"}")
+                .status(OutboxEventStatus.PENDING)
+                .attemptCount(0)
+                .build();
+        }
 
 }

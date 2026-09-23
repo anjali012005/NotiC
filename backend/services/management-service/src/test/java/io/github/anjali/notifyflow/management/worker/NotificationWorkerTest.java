@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,7 +21,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import io.github.anjali.notifyflow.management.entity.Notification;
@@ -65,19 +63,17 @@ class NotificationWorkerTest {
     }
 
     @Test
-    void claimsQueuedNotificationAndMarksItSentAfterSuccessfulDispatch() {
+    void claimsQueuedNotificationAndMarksItSentAfterSuccessfulDispatch() throws Exception {
         UUID notificationId = UUID.randomUUID();
         Notification notification = queuedNotification(notificationId);
         NotificationProvider provider = enabledProvider(notification.getProviderId());
 
-        when(notificationRepository.findIdsByStatus(eq(NotificationDeliveryStatus.QUEUED), any(Pageable.class)))
-                .thenReturn(List.of(notificationId));
         when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true);
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
         when(providerRepository.findById(notification.getProviderId())).thenReturn(Optional.of(provider));
         when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
 
-        worker.processQueuedNotifications();
+        worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 1L);
 
         InOrder order = inOrder(trackingService, dispatcher);
         order.verify(trackingService).claimQueuedNotification(notificationId);
@@ -88,13 +84,11 @@ class NotificationWorkerTest {
     }
 
     @Test
-    void marksNotificationFailedWhenDispatchThrows() {
+    void marksNotificationFailedWhenDispatchThrows() throws Exception {
         UUID notificationId = UUID.randomUUID();
         Notification notification = queuedNotification(notificationId);
         NotificationProvider provider = enabledProvider(notification.getProviderId());
 
-        when(notificationRepository.findIdsByStatus(eq(NotificationDeliveryStatus.QUEUED), any(Pageable.class)))
-                .thenReturn(List.of(notificationId));
         when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true);
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
         when(providerRepository.findById(notification.getProviderId())).thenReturn(Optional.of(provider));
@@ -102,7 +96,7 @@ class NotificationWorkerTest {
         org.mockito.Mockito.doThrow(new IllegalStateException("provider unavailable"))
                 .when(dispatcher).dispatch(any(), any(), any(), any());
 
-        worker.processQueuedNotifications();
+        worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 1L);
 
         verify(trackingService).updateNotificationStatusWithFailure(
                 eq(notificationId), eq(NotificationDeliveryStatus.FAILED),
@@ -111,22 +105,20 @@ class NotificationWorkerTest {
     }
 
     @Test
-    void doesNotProcessFailedWorkAgainWhenItIsNoLongerQueued() {
+    void doesNotProcessFailedWorkAgainWhenItIsNoLongerQueued() throws Exception {
         UUID notificationId = UUID.randomUUID();
-        when(notificationRepository.findIdsByStatus(eq(NotificationDeliveryStatus.QUEUED), any(Pageable.class)))
-                .thenReturn(List.of(notificationId), List.of());
         when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true);
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.empty());
 
-        worker.processQueuedNotifications();
-        worker.processQueuedNotifications();
+        worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 1L);
+        worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 2L);
 
-        verify(trackingService).claimQueuedNotification(notificationId);
-        verify(notificationRepository).findById(notificationId);
+        verify(trackingService, times(2)).claimQueuedNotification(notificationId);
+        verify(notificationRepository, times(2)).findById(notificationId);
     }
 
     @Test
-    void onlyOneOfMultipleWorkersProcessesTheSameClaimedNotification() {
+    void onlyOneOfMultipleWorkersProcessesTheSameClaimedNotification() throws Exception {
         UUID notificationId = UUID.randomUUID();
         Notification notification = queuedNotification(notificationId);
         NotificationProvider provider = enabledProvider(notification.getProviderId());
@@ -135,15 +127,13 @@ class NotificationWorkerTest {
         ReflectionTestUtils.setField(secondWorker, "batchSize", 20);
         ReflectionTestUtils.setField(secondWorker, "processingTimeoutMinutes", 10L);
 
-        when(notificationRepository.findIdsByStatus(eq(NotificationDeliveryStatus.QUEUED), any(Pageable.class)))
-                .thenReturn(List.of(notificationId));
         when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true, false);
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
         when(providerRepository.findById(notification.getProviderId())).thenReturn(Optional.of(provider));
         when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
 
-        worker.processQueuedNotifications();
-        secondWorker.processQueuedNotifications();
+        worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 1L);
+        secondWorker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 2L);
 
         verify(trackingService, times(2)).claimQueuedNotification(notificationId);
         verify(dispatcher, times(1)).dispatch(any(), any(), any(), any());
@@ -151,14 +141,9 @@ class NotificationWorkerTest {
 
     @Test
     void recoversStaleProcessingNotificationsBeforeLookingForQueuedWork() {
-        when(notificationRepository.findIdsByStatus(eq(NotificationDeliveryStatus.QUEUED), any(Pageable.class)))
-                .thenReturn(List.of());
-
         worker.processQueuedNotifications();
 
-        InOrder order = inOrder(trackingService, notificationRepository);
-        order.verify(trackingService).recoverStuckNotifications(any(LocalDateTime.class));
-        order.verify(notificationRepository).findIdsByStatus(eq(NotificationDeliveryStatus.QUEUED), any(Pageable.class));
+        verify(trackingService).recoverStuckNotifications(any(LocalDateTime.class));
     }
 
         @Test
@@ -204,4 +189,8 @@ class NotificationWorkerTest {
                 .enabled(true)
                 .build();
     }
+
+        private Channel mockChannel() {
+                return org.mockito.Mockito.mock(Channel.class);
+        }
 }

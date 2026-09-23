@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -30,10 +29,10 @@ import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
-import io.github.anjali.notifyflow.management.messaging.NotificationEventPublisher;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
+import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
@@ -61,7 +60,7 @@ class NotificationServiceImplTest {
     private NotificationTemplateService templateService;
 
         @Mock
-        private NotificationEventPublisher eventPublisher;
+        private OutboxEventRepository outboxEventRepository;
 
     @InjectMocks
     private NotificationServiceImpl service;

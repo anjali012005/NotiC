@@ -1,18 +1,16 @@
 package io.github.anjali.notifyflow.management.worker;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
-import com.rabbitmq.client.Channel;
-
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import com.rabbitmq.client.Channel;
 
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
@@ -51,12 +49,6 @@ public class NotificationWorker {
     @Scheduled(fixedDelayString = "${notification.rabbitmq.reconciliation-delay-ms:60000}")
     public void processQueuedNotifications() {
         trackingService.recoverStuckNotifications(LocalDateTime.now().minusMinutes(processingTimeoutMinutes));
-        List<UUID> notificationIds = notificationRepository.findIdsByStatus(
-                NotificationDeliveryStatus.QUEUED, PageRequest.of(0, batchSize));
-
-        for (UUID notificationId : notificationIds) {
-            processNotification(notificationId);
-        }
     }
 
     private void processNotification(UUID notificationId) {

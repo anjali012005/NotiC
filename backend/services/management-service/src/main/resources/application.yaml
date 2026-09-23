@@ -50,3 +50,7 @@ notification:
     queue: notifyflow.notification-created
     routing-key: notification.created
     reconciliation-delay-ms: 60000
+  outbox:
+    fixed-delay-ms: 5000
+    batch-size: 20
+    max-attempts: 10

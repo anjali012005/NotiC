@@ -32,12 +32,16 @@ import io.github.anjali.notifyflow.management.mapper.NotificationMapper;
 import io.github.anjali.notifyflow.management.messaging.NotificationEventPublisher;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
+import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationTrackingServiceImplTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+        @Mock
+        private OutboxEventRepository outboxEventRepository;
 
     @Mock
     private NotificationProviderRepository providerRepository;
