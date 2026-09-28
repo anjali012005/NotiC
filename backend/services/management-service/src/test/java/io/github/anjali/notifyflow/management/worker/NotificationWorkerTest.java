@@ -21,6 +21,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import io.github.anjali.notifyflow.management.entity.Notification;
@@ -53,6 +54,9 @@ class NotificationWorkerTest {
     @Mock
     private NotificationDispatcher dispatcher;
 
+    @Mock
+    private RabbitTemplate rabbitTemplate;
+
     @InjectMocks
     private NotificationWorker worker;
 
@@ -60,6 +64,10 @@ class NotificationWorkerTest {
     void setUp() {
         ReflectionTestUtils.setField(worker, "batchSize", 20);
         ReflectionTestUtils.setField(worker, "processingTimeoutMinutes", 10L);
+        ReflectionTestUtils.setField(worker, "retryExchange", "notifyflow.retry");
+        ReflectionTestUtils.setField(worker, "deadLetterExchange", "notifyflow.dlx");
+        ReflectionTestUtils.setField(worker, "rabbitTemplate", rabbitTemplate);
+        ReflectionTestUtils.setField(worker, "retryPolicyProperties", new io.github.anjali.notifyflow.management.retry.RetryPolicyProperties());
     }
 
     @Test
@@ -84,7 +92,29 @@ class NotificationWorkerTest {
     }
 
     @Test
-    void marksNotificationFailedWhenDispatchThrows() throws Exception {
+    void marksNotificationFailedWhenDispatchThrowsNonRetryableFailure() throws Exception {
+        UUID notificationId = UUID.randomUUID();
+        Notification notification = queuedNotification(notificationId);
+        NotificationProvider provider = enabledProvider(notification.getProviderId());
+
+        when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true);
+        when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
+        when(providerRepository.findById(notification.getProviderId())).thenReturn(Optional.of(provider));
+        when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("invalid recipient email"))
+                .when(dispatcher).dispatch(any(), any(), any(), any());
+
+        worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 1L);
+
+        verify(trackingService).updateNotificationStatusWithFailure(
+                eq(notificationId), eq(NotificationDeliveryStatus.FAILED),
+                org.mockito.ArgumentMatchers.contains("invalid recipient email"));
+        org.mockito.Mockito.verifyNoInteractions(rabbitTemplate);
+        verify(trackingService, never()).setSentAt(notificationId);
+    }
+
+    @Test
+    void routesRetryableFailureToRetryQueueInsteadOfPermanentFailure() throws Exception {
         UUID notificationId = UUID.randomUUID();
         Notification notification = queuedNotification(notificationId);
         NotificationProvider provider = enabledProvider(notification.getProviderId());
@@ -98,10 +128,31 @@ class NotificationWorkerTest {
 
         worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 1L);
 
+        verify(trackingService).incrementRetryCount(notificationId);
+        verify(rabbitTemplate).convertAndSend(eq("notifyflow.retry"), eq("notification.retry.5s"), any(NotificationCreatedMessage.class));
+        verify(trackingService, never()).updateNotificationStatusWithFailure(any(), any(), any());
+    }
+
+    @Test
+    void publishesToDlqWhenRetryLimitIsReached() throws Exception {
+        UUID notificationId = UUID.randomUUID();
+        Notification notification = queuedNotification(notificationId);
+        notification.setRetryCount(2);
+        NotificationProvider provider = enabledProvider(notification.getProviderId());
+
+        when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true);
+        when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
+        when(providerRepository.findById(notification.getProviderId())).thenReturn(Optional.of(provider));
+        when(dispatcherFactory.resolveDispatcher(provider)).thenReturn(dispatcher);
+        org.mockito.Mockito.doThrow(new IllegalStateException("provider unavailable"))
+                .when(dispatcher).dispatch(any(), any(), any(), any());
+
+        worker.consume(new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"), mockChannel(), 1L);
+
         verify(trackingService).updateNotificationStatusWithFailure(
                 eq(notificationId), eq(NotificationDeliveryStatus.FAILED),
-                org.mockito.ArgumentMatchers.contains("provider unavailable"));
-        verify(trackingService, never()).setSentAt(notificationId);
+                org.mockito.ArgumentMatchers.contains("Retry limit reached"));
+        verify(rabbitTemplate).convertAndSend(eq("notifyflow.dlx"), eq("notification.dlq"), any(NotificationCreatedMessage.class));
     }
 
     @Test
@@ -126,6 +177,10 @@ class NotificationWorkerTest {
                 notificationRepository, providerRepository, trackingService, dispatcherFactory);
         ReflectionTestUtils.setField(secondWorker, "batchSize", 20);
         ReflectionTestUtils.setField(secondWorker, "processingTimeoutMinutes", 10L);
+        ReflectionTestUtils.setField(secondWorker, "retryExchange", "notifyflow.retry");
+        ReflectionTestUtils.setField(secondWorker, "deadLetterExchange", "notifyflow.dlx");
+        ReflectionTestUtils.setField(secondWorker, "rabbitTemplate", rabbitTemplate);
+        ReflectionTestUtils.setField(secondWorker, "retryPolicyProperties", new io.github.anjali.notifyflow.management.retry.RetryPolicyProperties());
 
         when(trackingService.claimQueuedNotification(notificationId)).thenReturn(true, false);
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));

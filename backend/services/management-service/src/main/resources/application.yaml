@@ -37,6 +37,12 @@ management:
 
 notification:
   max-retry-count: 3
+  retry:
+    max-attempts: 3
+    delays:
+      - 5s
+      - 30s
+      - 2m
   worker:
     fixed-delay-ms: 5000
     batch-size: 20
@@ -49,6 +55,12 @@ notification:
     exchange: notifyflow.notifications
     queue: notifyflow.notification-created
     routing-key: notification.created
+    retry-exchange: notifyflow.retry
+    retry-queue-5s: notification.retry.5s
+    retry-queue-30s: notification.retry.30s
+    retry-queue-2m: notification.retry.2m
+    dlx: notifyflow.dlx
+    dlq-queue: notification.dlq
     reconciliation-delay-ms: 60000
   outbox:
     fixed-delay-ms: 5000

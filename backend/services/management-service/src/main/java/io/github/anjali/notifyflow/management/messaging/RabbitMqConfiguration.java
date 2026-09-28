@@ -34,6 +34,56 @@ public class RabbitMqConfiguration {
     }
 
     @Bean
+    DirectExchange retryExchange(@Value("${notification.rabbitmq.retry-exchange:notifyflow.retry}") String name) {
+        return new DirectExchange(name);
+    }
+
+    @Bean
+    Queue retryQueue5s(@Value("${notification.rabbitmq.retry-queue-5s:notification.retry.5s}") String name) {
+        return new Queue(name, true);
+    }
+
+    @Bean
+    Queue retryQueue30s(@Value("${notification.rabbitmq.retry-queue-30s:notification.retry.30s}") String name) {
+        return new Queue(name, true);
+    }
+
+    @Bean
+    Queue retryQueue2m(@Value("${notification.rabbitmq.retry-queue-2m:notification.retry.2m}") String name) {
+        return new Queue(name, true);
+    }
+
+    @Bean
+    Queue dlqQueue(@Value("${notification.rabbitmq.dlq-queue:notification.dlq}") String name) {
+        return new Queue(name, true);
+    }
+
+    @Bean
+    Binding retryBinding5s(Queue retryQueue5s, DirectExchange retryExchange) {
+        return BindingBuilder.bind(retryQueue5s).to(retryExchange).with("notification.retry.5s");
+    }
+
+    @Bean
+    Binding retryBinding30s(Queue retryQueue30s, DirectExchange retryExchange) {
+        return BindingBuilder.bind(retryQueue30s).to(retryExchange).with("notification.retry.30s");
+    }
+
+    @Bean
+    Binding retryBinding2m(Queue retryQueue2m, DirectExchange retryExchange) {
+        return BindingBuilder.bind(retryQueue2m).to(retryExchange).with("notification.retry.2m");
+    }
+
+    @Bean
+    DirectExchange deadLetterExchange(@Value("${notification.rabbitmq.dlx:notifyflow.dlx}") String name) {
+        return new DirectExchange(name);
+    }
+
+    @Bean
+    Binding dlqBinding(Queue dlqQueue, DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(dlqQueue).to(deadLetterExchange).with("notification.dlq");
+    }
+
+    @Bean
     MessageConverter rabbitMessageConverter() {
         return new JacksonJsonMessageConverter();
     }

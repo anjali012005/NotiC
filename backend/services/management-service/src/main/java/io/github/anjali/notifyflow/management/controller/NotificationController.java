@@ -86,4 +86,18 @@ public class NotificationController {
                     .build());
         }
     }
+
+    @PostMapping("/dlq/{id}/reprocess")
+    public ResponseEntity<MessageResponse> reprocessDlqNotification(@PathVariable UUID id) {
+        boolean success = trackingService.retryNotification(id);
+        if (success) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(MessageResponse.builder()
+                    .message("DLQ notification requeued successfully")
+                    .build());
+        }
+
+        return ResponseEntity.badRequest().body(MessageResponse.builder()
+                .message("DLQ reprocess failed. Notification must be in FAILED state and below the retry limit")
+                .build());
+    }
 }
