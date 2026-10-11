@@ -18,6 +18,7 @@ import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.messaging.NotificationCreatedMessage;
+import io.github.anjali.notifyflow.management.provider.ProviderProtectionService;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
 import io.github.anjali.notifyflow.management.retry.RetryPolicyProperties;
@@ -35,16 +36,17 @@ public class NotificationWorker {
     private NotificationDispatcherFactory dispatcherFactory;
     private RabbitTemplate rabbitTemplate;
     private RetryPolicyProperties retryPolicyProperties;
+    private ProviderProtectionService providerProtectionService;
 
     public NotificationWorker() {
-        this(null, null, null, null, null, null);
+        this(null, null, null, null, null, null, null);
     }
 
     public NotificationWorker(NotificationRepository notificationRepository,
                               NotificationProviderRepository providerRepository,
                               NotificationTrackingService trackingService,
                               NotificationDispatcherFactory dispatcherFactory) {
-        this(notificationRepository, providerRepository, trackingService, dispatcherFactory, null, null);
+        this(notificationRepository, providerRepository, trackingService, dispatcherFactory, null, null, null);
     }
 
     @Autowired
@@ -53,13 +55,15 @@ public class NotificationWorker {
                               NotificationTrackingService trackingService,
                               NotificationDispatcherFactory dispatcherFactory,
                               RabbitTemplate rabbitTemplate,
-                              RetryPolicyProperties retryPolicyProperties) {
+                              RetryPolicyProperties retryPolicyProperties,
+                              ProviderProtectionService providerProtectionService) {
         this.notificationRepository = notificationRepository;
         this.providerRepository = providerRepository;
         this.trackingService = trackingService;
         this.dispatcherFactory = dispatcherFactory;
         this.rabbitTemplate = rabbitTemplate;
         this.retryPolicyProperties = retryPolicyProperties;
+        this.providerProtectionService = providerProtectionService;
     }
 
     @Value("${notification.worker.batch-size:20}")
@@ -105,11 +109,21 @@ public class NotificationWorker {
                 throw new IllegalStateException("Provider is not enabled: " + provider.getName());
             }
 
+            if (providerProtectionService != null) {
+                providerProtectionService.beforeCall(provider);
+            }
+
             NotificationDispatcher dispatcher = dispatcherFactory.resolveDispatcher(provider);
             dispatcher.dispatch(provider, notification.getRecipient(), notification.getSubject(), notification.getBody());
+            if (providerProtectionService != null) {
+                providerProtectionService.recordSuccess(provider);
+            }
             trackingService.updateNotificationStatus(notificationId, NotificationDeliveryStatus.SENT);
             trackingService.setSentAt(notificationId);
         } catch (Exception exception) {
+            if (providerProtectionService != null) {
+                providerProtectionService.recordFailure(providerRepository.findById(notification.getProviderId()).orElse(null));
+            }
             handleFailure(notificationId, notification, exception);
         }
     }

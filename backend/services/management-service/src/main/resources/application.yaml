@@ -48,9 +48,24 @@ notification:
     batch-size: 20
     processing-timeout-minutes: 10
   providers:
+    default:
+      rate-limit:
+        requests-per-second: 20
+        burst: 10
+      circuit-breaker:
+        failure-threshold: 5
+        open-duration-ms: 30000
+        half-open-max-calls: 2
     sendgrid:
       # Override with SENDGRID_BASE_URL for a local HTTP stub; keep credentials out of this file.
       base-url: ${SENDGRID_BASE_URL:https://api.sendgrid.com/v3/mail/send}
+      rate-limit:
+        requests-per-second: 10
+        burst: 5
+      circuit-breaker:
+        failure-threshold: 3
+        open-duration-ms: 30000
+        half-open-max-calls: 2
   rabbitmq:
     exchange: notifyflow.notifications
     queue: notifyflow.notification-created
