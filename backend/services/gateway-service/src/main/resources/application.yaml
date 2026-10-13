@@ -17,7 +17,21 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,metrics,prometheus,gateway
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+      group:
+        liveness:
+          include: livenessState,ping
+        readiness:
+          include: readinessState
+  prometheus:
+    metrics:
+      export:
+        enabled: true
 
 logging:
   level:

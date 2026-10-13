@@ -3,6 +3,8 @@ package io.github.anjali.notifyflow.management.service.impl;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,16 +24,21 @@ import io.github.anjali.notifyflow.management.repository.NotificationProviderRep
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
 import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
+import io.github.anjali.notifyflow.management.observability.NotificationMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class NotificationTrackingServiceImpl implements NotificationTrackingService {
 
+    private static final Logger log = LoggerFactory.getLogger(NotificationTrackingServiceImpl.class);
+
     private final NotificationRepository notificationRepository;
     private final NotificationProviderRepository providerRepository;
     private final NotificationMapper notificationMapper;
     private final OutboxEventRepository outboxEventRepository;
+    private NotificationMetrics notificationMetrics = new NotificationMetrics(new SimpleMeterRegistry());
 
     @Value("${notification.max-retry-count:3}")
     private int maxRetryCount;
@@ -79,7 +86,10 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
     public Notification incrementRetryCount(UUID notificationId) {
         Notification notification = findByIdOrThrow(notificationId);
         notification.setRetryCount(notification.getRetryCount() + 1);
-        return notificationRepository.save(notification);
+        notificationRepository.save(notification);
+        log.info("notification.retry.scheduled notificationId={} retryCount={} correlationId={}",
+                notificationId, notification.getRetryCount(), io.github.anjali.notifyflow.management.observability.CorrelationContext.currentOrCreate());
+        return notification;
     }
 
     @Override

@@ -44,21 +44,11 @@ public class SendGridDispatcher implements NotificationDispatcher {
         // String apiKey = config.getOrDefault("apiKey", System.getenv("SENDGRID_API_KEY"));
         String apiKey = config.get("apiKey");
 
-if (isBlank(apiKey)) {
-    apiKey = System.getenv("SENDGRID_API_KEY");
-}
+        if (isBlank(apiKey)) {
+            apiKey = System.getenv("SENDGRID_API_KEY");
+        }
         String fromEmail = config.get("fromEmail");
         String fromName = config.get("fromName");
-
-      
-System.out.println("===== SENDGRID DEBUG =====");
-System.out.println("Provider config present: " + (provider.getConfig() != null));
-System.out.println("fromEmail present: " + !isBlank(fromEmail));
-System.out.println("fromName present: " + !isBlank(fromName));
-System.out.println("API key present: " + !isBlank(apiKey));
-System.out.println("Environment API key present: "
-        + !isBlank(System.getenv("SENDGRID_API_KEY")));
-System.out.println("==========================");
 
         if (isBlank(apiKey) || isBlank(fromEmail)) {
             throw new ProviderDispatchException("SendGrid configuration requires fromEmail and an API key");
@@ -89,14 +79,11 @@ System.out.println("==========================");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ProviderDispatchException("SendGrid request was interrupted", e);
-        // } catch (Exception e) {
-        //     throw new ProviderDispatchException("SendGrid request failed", e);
-        // }
         } catch (Exception e) {
-    e.printStackTrace();
-    throw new ProviderDispatchException(
-        "SendGrid request failed: " + e.getClass().getSimpleName() + " - " + e.getMessage(), e);
-    }}
+            throw new ProviderDispatchException(
+                    "SendGrid request failed: " + e.getClass().getSimpleName() + " - " + e.getMessage(), e);
+        }
+    }
 
     private Map<String, String> parseConfig(String rawConfig) {
         if (isBlank(rawConfig)) {

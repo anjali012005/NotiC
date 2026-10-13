@@ -6,6 +6,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import io.github.anjali.notifyflow.management.observability.CorrelationContext;
 import lombok.RequiredArgsConstructor;
 
 @Component
@@ -25,6 +26,10 @@ public class RabbitNotificationEventPublisher implements NotificationEventPublis
     @Override
     public void publishNotificationCreated(UUID notificationId) {
         rabbitTemplate.convertAndSend(exchange, routingKey,
-                new NotificationCreatedMessage(notificationId, NOTIFICATION_CREATED));
+                new NotificationCreatedMessage(notificationId, NOTIFICATION_CREATED), message -> {
+                    String correlationId = CorrelationContext.currentOrCreate();
+                    message.getMessageProperties().setHeader(CorrelationContext.HEADER_NAME, correlationId);
+                    return message;
+                });
     }
 }

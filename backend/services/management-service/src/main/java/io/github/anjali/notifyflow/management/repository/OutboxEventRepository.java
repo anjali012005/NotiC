@@ -1,5 +1,6 @@
 package io.github.anjali.notifyflow.management.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,4 +24,13 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     List<OutboxEvent> findPendingForUpdate(@Param("status") OutboxEventStatus status,
                                            @Param("maxAttempts") int maxAttempts,
                                            Pageable pageable);
+
+    long countByStatus(OutboxEventStatus status);
+
+    @Query("SELECT e.createdAt FROM OutboxEvent e WHERE e.status = :status ORDER BY e.createdAt ASC")
+    List<LocalDateTime> findCreatedAtByStatus(@Param("status") OutboxEventStatus status);
+
+    default java.util.Optional<LocalDateTime> findOldestCreatedAtByStatus(OutboxEventStatus status) {
+        return findCreatedAtByStatus(status).stream().findFirst();
+    }
 }

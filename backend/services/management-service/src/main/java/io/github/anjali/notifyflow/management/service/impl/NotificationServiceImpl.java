@@ -2,8 +2,12 @@ package io.github.anjali.notifyflow.management.service.impl;
 
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import io.github.anjali.notifyflow.management.dto.request.RenderTemplateRequest;
 import io.github.anjali.notifyflow.management.dto.request.SendNotificationRequest;
@@ -30,12 +34,16 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
 
+    private static final Logger log = LoggerFactory.getLogger(NotificationServiceImpl.class);
+
     private final NotificationTemplateRepository templateRepository;
     private final NotificationTemplateVersionRepository versionRepository;
     private final NotificationProviderRepository providerRepository;
     private final NotificationTrackingService trackingService;
     private final NotificationTemplateService templateService;
-        private final OutboxEventRepository outboxEventRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private io.github.anjali.notifyflow.management.observability.NotificationMetrics notificationMetrics =
+            new io.github.anjali.notifyflow.management.observability.NotificationMetrics(new SimpleMeterRegistry());
 
     @Override
     @Transactional
@@ -69,6 +77,10 @@ public class NotificationServiceImpl implements NotificationService {
                 renderedTemplate.getBody()
         );
         outboxEventRepository.save(createNotificationCreatedEvent(notification.getId()));
+        notificationMetrics.recordNotificationAccepted(template.getChannel().name());
+        log.info("notification.accepted notificationId={} channel={} templateKey={} correlationId={}",
+                notification.getId(), template.getChannel(), template.getTemplateKey(),
+                io.github.anjali.notifyflow.management.observability.CorrelationContext.currentOrCreate());
 
         return NotificationResponse.builder()
                 .id(notification.getId())

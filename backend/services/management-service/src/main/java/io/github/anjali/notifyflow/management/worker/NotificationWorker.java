@@ -1,8 +1,11 @@
 package io.github.anjali.notifyflow.management.worker;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.AmqpHeaders;
@@ -18,6 +21,8 @@ import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.messaging.NotificationCreatedMessage;
+import io.github.anjali.notifyflow.management.observability.CorrelationContext;
+import io.github.anjali.notifyflow.management.observability.NotificationMetrics;
 import io.github.anjali.notifyflow.management.provider.ProviderProtectionService;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
@@ -25,10 +30,13 @@ import io.github.anjali.notifyflow.management.retry.RetryPolicyProperties;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcherFactory;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /** Consumes notification work and dispatches it after atomically claiming each notification. */
 @Component
 public class NotificationWorker {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationWorker.class);
 
     private NotificationRepository notificationRepository;
     private NotificationProviderRepository providerRepository;
@@ -37,6 +45,7 @@ public class NotificationWorker {
     private RabbitTemplate rabbitTemplate;
     private RetryPolicyProperties retryPolicyProperties;
     private ProviderProtectionService providerProtectionService;
+    private NotificationMetrics notificationMetrics = new NotificationMetrics(new SimpleMeterRegistry());
 
     public NotificationWorker() {
         this(null, null, null, null, null, null, null);
@@ -46,7 +55,7 @@ public class NotificationWorker {
                               NotificationProviderRepository providerRepository,
                               NotificationTrackingService trackingService,
                               NotificationDispatcherFactory dispatcherFactory) {
-        this(notificationRepository, providerRepository, trackingService, dispatcherFactory, null, null, null);
+        this(notificationRepository, providerRepository, trackingService, dispatcherFactory, null, null, null, null);
     }
 
     @Autowired
@@ -57,6 +66,18 @@ public class NotificationWorker {
                               RabbitTemplate rabbitTemplate,
                               RetryPolicyProperties retryPolicyProperties,
                               ProviderProtectionService providerProtectionService) {
+        this(notificationRepository, providerRepository, trackingService, dispatcherFactory,
+                rabbitTemplate, retryPolicyProperties, providerProtectionService, null);
+    }
+
+    public NotificationWorker(NotificationRepository notificationRepository,
+                              NotificationProviderRepository providerRepository,
+                              NotificationTrackingService trackingService,
+                              NotificationDispatcherFactory dispatcherFactory,
+                              RabbitTemplate rabbitTemplate,
+                              RetryPolicyProperties retryPolicyProperties,
+                              ProviderProtectionService providerProtectionService,
+                              NotificationMetrics notificationMetrics) {
         this.notificationRepository = notificationRepository;
         this.providerRepository = providerRepository;
         this.trackingService = trackingService;
@@ -64,6 +85,9 @@ public class NotificationWorker {
         this.rabbitTemplate = rabbitTemplate;
         this.retryPolicyProperties = retryPolicyProperties;
         this.providerProtectionService = providerProtectionService;
+        this.notificationMetrics = notificationMetrics == null
+                ? new NotificationMetrics(new SimpleMeterRegistry())
+                : notificationMetrics;
     }
 
     @Value("${notification.worker.batch-size:20}")
@@ -81,8 +105,20 @@ public class NotificationWorker {
     @RabbitListener(queues = "${notification.rabbitmq.queue}")
     public void consume(NotificationCreatedMessage message, Channel channel,
                          @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) throws java.io.IOException {
-        processNotification(message.getNotificationId());
-        channel.basicAck(deliveryTag, false);
+        consume(message, channel, deliveryTag, null);
+    }
+
+    public void consume(NotificationCreatedMessage message, Channel channel,
+                         @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag,
+                         @Header(name = CorrelationContext.HEADER_NAME, required = false) String correlationId)
+            throws java.io.IOException {
+        CorrelationContext.setCurrent(correlationId == null ? CorrelationContext.currentOrCreate() : correlationId);
+        try {
+            processNotification(message.getNotificationId());
+            channel.basicAck(deliveryTag, false);
+        } finally {
+            CorrelationContext.clear();
+        }
     }
 
     @Scheduled(fixedDelayString = "${notification.rabbitmq.reconciliation-delay-ms:60000}")
@@ -102,6 +138,8 @@ public class NotificationWorker {
             return;
         }
 
+        String channel = notification.getChannel() == null ? "UNKNOWN" : notification.getChannel().name();
+        long processingStartedNanos = System.nanoTime();
         try {
             NotificationProvider provider = providerRepository.findById(notification.getProviderId())
                     .orElseThrow(() -> new IllegalStateException("Provider not found"));
@@ -114,45 +152,79 @@ public class NotificationWorker {
             }
 
             NotificationDispatcher dispatcher = dispatcherFactory.resolveDispatcher(provider);
+            long dispatchStartedNanos = System.nanoTime();
             dispatcher.dispatch(provider, notification.getRecipient(), notification.getSubject(), notification.getBody());
+            notificationMetrics.recordProviderDispatch(
+                    provider.getProviderType() == null ? "UNKNOWN" : provider.getProviderType().name(),
+                    channel,
+                    "SUCCESS",
+                    "200");
+            notificationMetrics.recordProviderDispatchLatency(
+                    provider.getProviderType() == null ? "UNKNOWN" : provider.getProviderType().name(),
+                    channel,
+                    Duration.ofNanos(System.nanoTime() - dispatchStartedNanos));
             if (providerProtectionService != null) {
                 providerProtectionService.recordSuccess(provider);
             }
             trackingService.updateNotificationStatus(notificationId, NotificationDeliveryStatus.SENT);
             trackingService.setSentAt(notificationId);
+            notificationMetrics.recordNotificationDelivered(channel);
+            log.info("notification.dispatched notificationId={} provider={} channel={} correlationId={}",
+                    notificationId, provider.getProviderType(), channel, CorrelationContext.currentOrCreate());
         } catch (Exception exception) {
-            if (providerProtectionService != null) {
-                providerProtectionService.recordFailure(providerRepository.findById(notification.getProviderId()).orElse(null));
+            String failureCategory = categorizeFailure(exception);
+            notificationMetrics.recordProcessingError(channel, failureCategory);
+            if (providerRepository != null && notification.getProviderId() != null) {
+                NotificationProvider provider = providerRepository.findById(notification.getProviderId()).orElse(null);
+                if (providerProtectionService != null) {
+                    providerProtectionService.recordFailure(provider);
+                }
+                notificationMetrics.recordProviderFailure(
+                        provider == null || provider.getProviderType() == null ? "UNKNOWN" : provider.getProviderType().name(),
+                        channel,
+                        failureCategory);
             }
             handleFailure(notificationId, notification, exception);
+        } finally {
+            notificationMetrics.recordNotificationProcessingLatency(channel,
+                    Duration.ofNanos(System.nanoTime() - processingStartedNanos));
         }
     }
 
     private void handleFailure(UUID notificationId, Notification notification, Exception exception) {
+        String channel = notification.getChannel() == null ? "UNKNOWN" : notification.getChannel().name();
+        String failureCategory = categorizeFailure(exception);
         if (shouldRetry(notification, exception)) {
             int nextAttempt = (notification.getRetryCount() == null ? 0 : notification.getRetryCount()) + 1;
             int maxAttempts = retryPolicyProperties != null ? retryPolicyProperties.getMaxAttempts() : 3;
             if (nextAttempt >= maxAttempts) {
                 trackingService.updateNotificationStatusWithFailure(notificationId, NotificationDeliveryStatus.FAILED,
                         "Retry limit reached for provider failure: " + exception.getMessage());
+                notificationMetrics.recordNotificationFailed(channel, "RETRY_LIMIT");
                 if (rabbitTemplate != null) {
                     rabbitTemplate.convertAndSend(deadLetterExchange, "notification.dlq",
                             new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"));
                 }
+                log.warn("notification.retry.exhausted notificationId={} channel={} correlationId={}",
+                        notificationId, channel, CorrelationContext.currentOrCreate());
                 return;
             }
 
             trackingService.incrementRetryCount(notificationId);
+            notificationMetrics.recordRetryAttempt(channel);
             if (rabbitTemplate != null) {
                 String routingKey = buildRetryRoutingKey(nextAttempt);
                 rabbitTemplate.convertAndSend(retryExchange, routingKey,
                         new NotificationCreatedMessage(notificationId, "NOTIFICATION_CREATED"));
             }
+            log.info("notification.retry.scheduled notificationId={} channel={} delay={} correlationId={}",
+                    notificationId, channel, buildRetryRoutingKey(nextAttempt), CorrelationContext.currentOrCreate());
             return;
         }
 
         trackingService.updateNotificationStatusWithFailure(notificationId, NotificationDeliveryStatus.FAILED,
                 "Provider dispatch failed: " + exception.getMessage());
+        notificationMetrics.recordNotificationFailed(channel, failureCategory);
     }
 
     private String buildRetryRoutingKey(int attemptNumber) {
@@ -189,10 +261,27 @@ public class NotificationWorker {
                 || message.contains("busy")
                 || message.contains("service unavailable");
 
-        if (!retryable) {
-            return false;
-        }
+        return retryable;
+    }
 
-        return true;
+    private String categorizeFailure(Exception exception) {
+        if (exception == null) {
+            return "UNKNOWN";
+        }
+        String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+        String normalized = message.toLowerCase();
+        if (normalized.contains("timeout")) {
+            return "TIMEOUT";
+        }
+        if (normalized.contains("rate limit") || normalized.contains("429")) {
+            return "RATE_LIMIT";
+        }
+        if (normalized.contains("refused") || normalized.contains("connection") || normalized.contains("network") || normalized.contains("unavailable") || normalized.contains("service unavailable")) {
+            return "UNAVAILABLE";
+        }
+        if (normalized.contains("invalid") || normalized.contains("bad request") || normalized.contains("validation")) {
+            return "INVALID_REQUEST";
+        }
+        return "UNKNOWN";
     }
 }
