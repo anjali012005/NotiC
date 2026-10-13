@@ -22,6 +22,21 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     Optional<Notification> findById(UUID id);
 
+    Optional<Notification> findByTenantIdAndId(UUID tenantId, UUID id);
+
+    @Query("SELECT n FROM Notification n WHERE n.tenantId = :tenantId AND " +
+           "(:status IS NULL OR n.status = :status) AND " +
+           "(:channel IS NULL OR n.channel = :channel) AND " +
+           "(:recipient IS NULL OR n.recipient LIKE %:recipient%) AND " +
+           "(:providerName IS NULL OR n.providerName = :providerName)")
+    Page<Notification> findByTenantIdAndFilters(
+            @Param("tenantId") UUID tenantId,
+            @Param("status") NotificationDeliveryStatus status,
+            @Param("channel") NotificationChannel channel,
+            @Param("recipient") String recipient,
+            @Param("providerName") String providerName,
+            Pageable pageable);
+
     @Query("SELECT n FROM Notification n WHERE " +
            "(:status IS NULL OR n.status = :status) AND " +
            "(:channel IS NULL OR n.channel = :channel) AND " +

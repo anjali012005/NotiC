@@ -24,7 +24,7 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "notification_providers", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_provider_channel_name", columnNames = {"channel", "name"})
+    @UniqueConstraint(name = "uk_provider_tenant_channel_name", columnNames = {"tenant_id", "channel", "name"})
 })
 @Getter
 @Setter
@@ -36,6 +36,9 @@ public class NotificationProvider {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(nullable = false, length = 100)
     private String name;

@@ -33,6 +33,7 @@ import io.github.anjali.notifyflow.management.messaging.NotificationEventPublish
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
 import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationTrackingServiceImplTest {
@@ -48,6 +49,9 @@ class NotificationTrackingServiceImplTest {
 
     @Mock
     private NotificationMapper notificationMapper;
+
+        @Mock
+        private TenantAuthorizationService tenantAuthorizationService;
 
         @Mock
         private NotificationEventPublisher eventPublisher;
@@ -175,7 +179,7 @@ class NotificationTrackingServiceImplTest {
                 .build();
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(notificationMapper.toDetailsResponse(notification)).thenReturn(any());
+        when(notificationMapper.toDetailsResponse(notification)).thenReturn(null);
 
         trackingService.getNotificationById(notificationId);
 
@@ -219,7 +223,7 @@ class NotificationTrackingServiceImplTest {
                 .build();
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(providerRepository.findById(providerId)).thenReturn(Optional.of(provider));
+        when(providerRepository.findByTenantIdAndId(any(UUID.class), any(UUID.class))).thenReturn(Optional.of(provider));
         when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         boolean result = trackingService.retryNotification(notificationId);
@@ -299,7 +303,7 @@ class NotificationTrackingServiceImplTest {
                 .build();
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(providerRepository.findById(providerId)).thenReturn(Optional.of(provider));
+        when(providerRepository.findByTenantIdAndId(any(UUID.class), any(UUID.class))).thenReturn(Optional.of(provider));
         when(notificationRepository.save(any(Notification.class))).thenReturn(notification);
 
         boolean result = trackingService.retryNotification(notificationId);

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.doNothing;
@@ -41,6 +42,7 @@ import io.github.anjali.notifyflow.management.mapper.NotificationTemplateMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.repository.TemplateVariableRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationTemplateServiceImplTest {
@@ -56,6 +58,9 @@ class NotificationTemplateServiceImplTest {
 
     @Mock
     private NotificationTemplateMapper mapper;
+
+        @Mock
+        private TenantAuthorizationService tenantAuthorizationService;
 
     @InjectMocks
     private NotificationTemplateServiceImpl service;
@@ -85,7 +90,7 @@ class NotificationTemplateServiceImplTest {
                 .message("Notification template created successfully")
                 .build();
 
-        when(repository.existsByTemplateKey("WELCOME_EMAIL")).thenReturn(false);
+        when(repository.existsByTenantIdAndTemplateKey(any(UUID.class), eq("WELCOME_EMAIL"))).thenReturn(false);
         when(repository.save(any(NotificationTemplate.class))).thenReturn(savedTemplate);
         when(versionRepository.save(any(NotificationTemplateVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(versionRepository.findByTemplate_IdAndActiveTrueOrderByVersionNumberDesc(any())).thenReturn(List.of());
@@ -109,7 +114,7 @@ class NotificationTemplateServiceImplTest {
         request.setSubject("Welcome to NotifyFlow");
         request.setBody("Hi {{name}}, welcome!");
 
-        when(repository.existsByTemplateKey("WELCOME_EMAIL")).thenReturn(true);
+        when(repository.existsByTenantIdAndTemplateKey(any(UUID.class), eq("WELCOME_EMAIL"))).thenReturn(true);
 
         assertThatThrownBy(() -> service.createTemplate(request))
                 .isInstanceOf(DuplicateTemplateKeyException.class)
@@ -261,7 +266,7 @@ class NotificationTemplateServiceImplTest {
                 .build();
 
         Page<NotificationTemplate> page = new PageImpl<>(List.of(template), PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")), 1);
-        when(repository.findByChannelAndTagsContaining(NotificationChannel.EMAIL, "AUTH", PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")))).thenReturn(page);
+        when(repository.findByTenantIdAndChannelAndTagsContaining(any(UUID.class), eq(NotificationChannel.EMAIL), eq("AUTH"), eq(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"))))).thenReturn(page);
         when(mapper.toResponse(template)).thenReturn(expectedResponse);
 
         PageResponse<NotificationTemplateResponse> response = service.getTemplates(0, 10, "createdAt", "desc", NotificationChannel.EMAIL, "AUTH");

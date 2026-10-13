@@ -33,6 +33,7 @@ import io.github.anjali.notifyflow.management.repository.NotificationProviderRep
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import io.github.anjali.notifyflow.management.service.dispatch.NotificationDispatcher;
@@ -61,6 +62,9 @@ class NotificationServiceImplTest {
 
         @Mock
         private OutboxEventRepository outboxEventRepository;
+
+        @Mock
+        private TenantAuthorizationService tenantAuthorizationService;
 
     @InjectMocks
     private NotificationServiceImpl service;

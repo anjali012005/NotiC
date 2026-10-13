@@ -3,6 +3,7 @@ package io.github.anjali.notifyflow.management.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,7 @@ import io.github.anjali.notifyflow.management.enums.ProviderType;
 import io.github.anjali.notifyflow.management.exception.DuplicateProviderException;
 import io.github.anjali.notifyflow.management.mapper.NotificationProviderMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
 
 class NotificationProviderServiceImplTest {
 
@@ -30,7 +32,7 @@ class NotificationProviderServiceImplTest {
     @BeforeEach
     void setUp() {
         repository = mock(NotificationProviderRepository.class);
-        service = new NotificationProviderServiceImpl(repository, new NotificationProviderMapper());
+        service = new NotificationProviderServiceImpl(repository, new NotificationProviderMapper(), mock(TenantAuthorizationService.class));
     }
 
     @Test
@@ -45,8 +47,8 @@ class NotificationProviderServiceImplTest {
                 .isDefault(true)
                 .build();
 
-        when(repository.existsByChannelAndName(NotificationChannel.EMAIL, "SendGrid")).thenReturn(false);
-        when(repository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.of(existing));
+        when(repository.existsByTenantIdAndChannelAndName(any(UUID.class), eq(NotificationChannel.EMAIL), eq("SendGrid"))).thenReturn(false);
+        when(repository.findByTenantIdAndChannelAndIsDefaultTrue(any(UUID.class), eq(NotificationChannel.EMAIL))).thenReturn(Optional.of(existing));
         when(repository.save(any(NotificationProvider.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CreateNotificationProviderRequest request = new CreateNotificationProviderRequest();
@@ -66,7 +68,7 @@ class NotificationProviderServiceImplTest {
 
     @Test
     void createProvider_shouldRejectDuplicateNameWithinSameChannel() {
-        when(repository.existsByChannelAndName(NotificationChannel.EMAIL, "SendGrid")).thenReturn(true);
+        when(repository.existsByTenantIdAndChannelAndName(any(UUID.class), eq(NotificationChannel.EMAIL), eq("SendGrid"))).thenReturn(true);
 
         CreateNotificationProviderRequest request = new CreateNotificationProviderRequest();
         request.setName("SendGrid");
@@ -81,8 +83,8 @@ class NotificationProviderServiceImplTest {
 
     @Test
     void createProvider_shouldPersistIsDefaultTrue() {
-        when(repository.existsByChannelAndName(NotificationChannel.EMAIL, "SendGrid")).thenReturn(false);
-        when(repository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.empty());
+        when(repository.existsByTenantIdAndChannelAndName(any(UUID.class), eq(NotificationChannel.EMAIL), eq("SendGrid"))).thenReturn(false);
+        when(repository.findByTenantIdAndChannelAndIsDefaultTrue(any(UUID.class), eq(NotificationChannel.EMAIL))).thenReturn(Optional.empty());
         when(repository.save(any(NotificationProvider.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CreateNotificationProviderRequest request = new CreateNotificationProviderRequest();
@@ -100,8 +102,8 @@ class NotificationProviderServiceImplTest {
 
     @Test
     void createProvider_shouldPersistIsDefaultFalse() {
-        when(repository.existsByChannelAndName(NotificationChannel.EMAIL, "SendGrid")).thenReturn(false);
-        when(repository.findByChannelAndIsDefaultTrue(NotificationChannel.EMAIL)).thenReturn(Optional.empty());
+        when(repository.existsByTenantIdAndChannelAndName(any(UUID.class), eq(NotificationChannel.EMAIL), eq("SendGrid"))).thenReturn(false);
+        when(repository.findByTenantIdAndChannelAndIsDefaultTrue(any(UUID.class), eq(NotificationChannel.EMAIL))).thenReturn(Optional.empty());
         when(repository.save(any(NotificationProvider.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CreateNotificationProviderRequest request = new CreateNotificationProviderRequest();

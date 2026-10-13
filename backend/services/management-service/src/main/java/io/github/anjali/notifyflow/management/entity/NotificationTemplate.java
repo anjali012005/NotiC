@@ -20,6 +20,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -27,7 +28,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "notification_templates")
+@Table(name = "notification_templates", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_template_tenant_key", columnNames = {"tenant_id", "template_key"})
+})
 @Getter
 @Setter
 @Builder
@@ -39,7 +42,10 @@ public class NotificationTemplate {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
+
+    @Column(nullable = false, length = 100)
     private String templateKey;
 
     @Column(nullable = false, length = 100)

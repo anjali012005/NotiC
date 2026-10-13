@@ -12,7 +12,21 @@ import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 
 @Repository
 public interface NotificationProviderRepository extends JpaRepository<NotificationProvider, UUID> {
+    boolean existsByTenantIdAndChannelAndName(UUID tenantId, NotificationChannel channel, String name);
+
     boolean existsByChannelAndName(NotificationChannel channel, String name);
+
+    Optional<NotificationProvider> findByTenantIdAndId(UUID tenantId, UUID id);
+
+    Optional<NotificationProvider> findByTenantIdAndChannelAndIsDefaultTrue(UUID tenantId, NotificationChannel channel);
+
+    List<NotificationProvider> findByTenantIdOrderByNameAsc(UUID tenantId);
+
+    List<NotificationProvider> findByTenantIdAndChannelOrderByNameAsc(UUID tenantId, NotificationChannel channel);
+
+    List<NotificationProvider> findByTenantIdAndEnabledOrderByNameAsc(UUID tenantId, boolean enabled);
+
+    List<NotificationProvider> findByTenantIdAndChannelAndEnabledOrderByNameAsc(UUID tenantId, NotificationChannel channel, boolean enabled);
 
     List<NotificationProvider> findByChannelOrderByNameAsc(NotificationChannel channel);
 

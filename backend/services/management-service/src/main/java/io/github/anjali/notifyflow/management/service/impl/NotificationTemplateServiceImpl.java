@@ -39,6 +39,8 @@ import io.github.anjali.notifyflow.management.repository.NotificationTemplateRep
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 
 import io.github.anjali.notifyflow.management.repository.TemplateVariableRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
+import io.github.anjali.notifyflow.management.security.TenantContext;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import lombok.RequiredArgsConstructor;
 
@@ -54,15 +56,17 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
 
     private final TemplateVariableRepository variableRepository;
     private final NotificationTemplateMapper mapper;
+    private final TenantAuthorizationService tenantAuthorizationService;
 
     @Override
     @Transactional
     public NotificationTemplateResponse createTemplate(CreateNotificationTemplateRequest request) {
-        if (repository.existsByTemplateKey(request.getTemplateKey())) {
+        if (repository.existsByTenantIdAndTemplateKey(currentTenantId(), request.getTemplateKey())) {
             throw new DuplicateTemplateKeyException("Template key '" + request.getTemplateKey() + "' already exists");
         }
 
         NotificationTemplate template = mapper.toEntity(request);
+        template.setTenantId(currentTenantId());
         NotificationTemplate savedTemplate = repository.save(template);
 
         NotificationTemplateVersion created = createVersion(savedTemplate, request.getSubject(), request.getBody(), true);
@@ -74,16 +78,24 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional(readOnly = true)
     public NotificationTemplateResponse getTemplateById(UUID id) {
-        NotificationTemplate template = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), id)
+                .orElseGet(() -> repository.findById(id).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + id);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
         return mapper.toResponse(template);
     }
 
     @Override
     @Transactional(readOnly = true)
     public NotificationTemplateResponse getTemplateByKey(String templateKey) {
-        NotificationTemplate template = repository.findByTemplateKey(templateKey)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with key: " + templateKey));
+        NotificationTemplate template = repository.findByTenantIdAndTemplateKey(currentTenantId(), templateKey)
+                .orElseGet(() -> repository.findByTemplateKey(templateKey).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with key: " + templateKey);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
         return mapper.toResponse(template);
     }
 
@@ -97,14 +109,15 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, safeSortBy));
 
         Page<NotificationTemplate> templatePage;
+        UUID tenantId = currentTenantId();
         if (channel != null && tag != null && !tag.isBlank()) {
-            templatePage = repository.findByChannelAndTagsContaining(channel, tag, pageable);
+            templatePage = repository.findByTenantIdAndChannelAndTagsContaining(tenantId, channel, tag, pageable);
         } else if (channel != null) {
-            templatePage = repository.findByChannel(channel, pageable);
+            templatePage = repository.findByTenantIdAndChannel(tenantId, channel, pageable);
         } else if (tag != null && !tag.isBlank()) {
-            templatePage = repository.findByTagsContaining(tag, pageable);
+            templatePage = repository.findByTenantIdAndTagsContaining(tenantId, tag, pageable);
         } else {
-            templatePage = repository.findAll(pageable);
+            templatePage = repository.findByTenantId(tenantId, pageable);
         }
 
         List<NotificationTemplateResponse> content = templatePage.getContent().stream()
@@ -124,8 +137,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional
     public NotificationTemplateResponse updateTemplate(UUID id, UpdateNotificationTemplateRequest request) {
-        NotificationTemplate existingTemplate = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+        NotificationTemplate existingTemplate = repository.findByTenantIdAndId(currentTenantId(), id)
+                .orElseGet(() -> repository.findById(id).orElse(null));
+        if (existingTemplate == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + id);
+        }
+        tenantAuthorizationService.requireTenantAccess(existingTemplate.getTenantId());
 
         NotificationTemplate updatedTemplate = mapper.updateEntity(request, existingTemplate);
         NotificationTemplate savedTemplate = repository.save(updatedTemplate);
@@ -139,8 +156,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional(readOnly = true)
     public List<NotificationTemplateVersionResponse> getTemplateVersions(UUID id) {
-        NotificationTemplate template = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), id)
+                .orElseGet(() -> repository.findById(id).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + id);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         return versionRepository.findByTemplate_IdOrderByVersionNumberDesc(template.getId()).stream()
                 .map(mapper::toVersionResponse)
@@ -150,8 +171,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional(readOnly = true)
     public NotificationTemplateVersionResponse getTemplateVersion(UUID id, Integer version) {
-        NotificationTemplate template = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), id)
+                .orElseGet(() -> repository.findById(id).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + id);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         NotificationTemplateVersion templateVersion = versionRepository.findByTemplate_IdAndVersionNumber(template.getId(), version)
                 .orElseThrow(() -> new ResourceNotFoundException("Version not found for template " + id + " and version " + version));
@@ -162,8 +187,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional
     public MessageResponse deleteTemplate(UUID id) {
-        NotificationTemplate template = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + id));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), id)
+                .orElseGet(() -> repository.findById(id).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + id);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         repository.delete(template);
         return MessageResponse.builder()
@@ -174,8 +203,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional
     public NotificationTemplateResponse createVersion(UUID templateId, CreateTemplateVersionRequest request) {
-        NotificationTemplate template = repository.findById(templateId)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), templateId)
+                .orElseGet(() -> repository.findById(templateId).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + templateId);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         NotificationTemplateVersion created = createVersion(template, request.getSubject(), request.getBody(), true);
         template.setActiveVersion(created.getVersionNumber());
@@ -186,8 +219,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional(readOnly = true)
     public List<String> getVariables(UUID templateId) {
-        NotificationTemplate template = repository.findById(templateId)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), templateId)
+                .orElseGet(() -> repository.findById(templateId).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + templateId);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         NotificationTemplateVersion version = versionRepository.findByTemplate_IdAndActiveTrue(template.getId())
             .orElseThrow(() -> new ResourceNotFoundException("No active version found for template: " + templateId));
@@ -200,8 +237,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
     @Override
     @Transactional(readOnly = true)
     public RenderTemplateResponse renderTemplate(UUID templateId, RenderTemplateRequest request) {
-        NotificationTemplate template = repository.findById(templateId)
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), templateId)
+                .orElseGet(() -> repository.findById(templateId).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + templateId);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         NotificationTemplateVersion version = versionRepository.findByTemplate_IdAndActiveTrue(template.getId())
             .orElseThrow(() -> new ResourceNotFoundException("No active version found for template: " + templateId));
@@ -232,8 +273,12 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         @Override
         @Transactional(readOnly = true)
         public List<io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse> getVersions(UUID templateId) {
-        NotificationTemplate template = repository.findById(templateId)
-            .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), templateId)
+            .orElseGet(() -> repository.findById(templateId).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + templateId);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         List<NotificationTemplateVersion> versions = versionRepository.findByTemplate_IdOrderByVersionNumberDesc(template.getId());
         return versions.stream().map(mapper::toVersionResponse).toList();
@@ -242,14 +287,23 @@ public class NotificationTemplateServiceImpl implements NotificationTemplateServ
         @Override
         @Transactional(readOnly = true)
         public io.github.anjali.notifyflow.management.dto.response.NotificationTemplateVersionResponse getVersion(UUID templateId, Integer versionNumber) {
-        NotificationTemplate template = repository.findById(templateId)
-            .orElseThrow(() -> new ResourceNotFoundException("Template not found with id: " + templateId));
+        NotificationTemplate template = repository.findByTenantIdAndId(currentTenantId(), templateId)
+            .orElseGet(() -> repository.findById(templateId).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with id: " + templateId);
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         NotificationTemplateVersion version = versionRepository.findByTemplate_IdAndVersionNumber(template.getId(), versionNumber)
             .orElseThrow(() -> new ResourceNotFoundException("Version " + versionNumber + " not found for template: " + templateId));
 
         return mapper.toVersionResponse(version);
         }
+
+    private UUID currentTenantId() {
+        UUID tenantId = TenantContext.getCurrentTenantId();
+        return tenantId == null ? UUID.fromString("00000000-0000-0000-0000-000000000000") : tenantId;
+    }
 
     private NotificationTemplateVersion createVersion(NotificationTemplate template, String subject, String body, boolean active) {
         validateTemplateContent(subject, body);

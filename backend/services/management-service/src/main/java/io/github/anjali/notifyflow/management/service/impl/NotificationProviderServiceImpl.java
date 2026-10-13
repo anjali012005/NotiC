@@ -17,6 +17,8 @@ import io.github.anjali.notifyflow.management.exception.DuplicateProviderExcepti
 import io.github.anjali.notifyflow.management.exception.ResourceNotFoundException;
 import io.github.anjali.notifyflow.management.mapper.NotificationProviderMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
+import io.github.anjali.notifyflow.management.security.TenantContext;
 import io.github.anjali.notifyflow.management.service.NotificationProviderService;
 import lombok.RequiredArgsConstructor;
 
@@ -26,6 +28,7 @@ public class NotificationProviderServiceImpl implements NotificationProviderServ
 
     private final NotificationProviderRepository repository;
     private final NotificationProviderMapper mapper;
+    private final TenantAuthorizationService tenantAuthorizationService;
 
     @Override
     @Transactional
@@ -33,6 +36,7 @@ public class NotificationProviderServiceImpl implements NotificationProviderServ
         validateUniqueName(request.getChannel(), request.getName());
 
         NotificationProvider provider = mapper.toEntity(request);
+        provider.setTenantId(currentTenantId());
 
         if (provider.isDefault()) {
             clearDefaultForChannel(provider.getChannel());
@@ -47,14 +51,15 @@ public class NotificationProviderServiceImpl implements NotificationProviderServ
     @Transactional(readOnly = true)
     public List<NotificationProviderResponse> getProviders(NotificationChannel channel, Boolean enabled) {
         List<NotificationProvider> providers;
+        UUID tenantId = currentTenantId();
         if (channel != null && enabled != null) {
-            providers = repository.findByChannelAndEnabledOrderByNameAsc(channel, enabled);
+            providers = repository.findByTenantIdAndChannelAndEnabledOrderByNameAsc(tenantId, channel, enabled);
         } else if (channel != null) {
-            providers = repository.findByChannelOrderByNameAsc(channel);
+            providers = repository.findByTenantIdAndChannelOrderByNameAsc(tenantId, channel);
         } else if (enabled != null) {
-            providers = repository.findByEnabledOrderByNameAsc(enabled);
+            providers = repository.findByTenantIdAndEnabledOrderByNameAsc(tenantId, enabled);
         } else {
-            providers = repository.findAllByOrderByNameAsc();
+            providers = repository.findByTenantIdOrderByNameAsc(tenantId);
         }
 
         return providers.stream().map(provider -> mapper.toResponse(provider, "Notification provider retrieved successfully")).toList();
@@ -123,22 +128,33 @@ public class NotificationProviderServiceImpl implements NotificationProviderServ
     }
 
     private NotificationProvider findByIdOrThrow(UUID id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Provider not found with id: " + id));
+        NotificationProvider provider = repository.findByTenantIdAndId(currentTenantId(), id)
+                .orElseGet(() -> repository.findById(id).orElse(null));
+        if (provider == null) {
+            throw new ResourceNotFoundException("Provider not found with id: " + id);
+        }
+        tenantAuthorizationService.requireTenantAccess(provider.getTenantId());
+        return provider;
+    }
+
+    private UUID currentTenantId() {
+        UUID tenantId = TenantContext.getCurrentTenantId();
+        return tenantId == null ? UUID.fromString("00000000-0000-0000-0000-000000000000") : tenantId;
     }
 
     private void validateUniqueName(NotificationChannel channel, String name) {
         if (channel == null || name == null || name.isBlank()) {
             return;
         }
-        boolean exists = repository.existsByChannelAndName(channel, name.trim());
+        boolean exists = repository.existsByTenantIdAndChannelAndName(currentTenantId(), channel, name.trim());
         if (exists) {
             throw new DuplicateProviderException("Provider with name '" + name + "' already exists for channel '" + channel + "'");
         }
     }
 
     private void clearDefaultForChannel(NotificationChannel channel) {
-        Optional<NotificationProvider> currentDefault = repository.findByChannelAndIsDefaultTrue(channel);
+        Optional<NotificationProvider> currentDefault = repository.findByTenantIdAndChannelAndIsDefaultTrue(
+                currentTenantId(), channel);
         currentDefault.ifPresent(provider -> {
             provider.setDefault(false);
             repository.save(provider);

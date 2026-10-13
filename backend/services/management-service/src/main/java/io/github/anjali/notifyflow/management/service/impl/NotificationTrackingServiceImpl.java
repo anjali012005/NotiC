@@ -23,6 +23,8 @@ import io.github.anjali.notifyflow.management.mapper.NotificationMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationRepository;
 import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
+import io.github.anjali.notifyflow.management.security.TenantContext;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
 import io.github.anjali.notifyflow.management.observability.NotificationMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -38,6 +40,7 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
     private final NotificationProviderRepository providerRepository;
     private final NotificationMapper notificationMapper;
     private final OutboxEventRepository outboxEventRepository;
+    private final TenantAuthorizationService tenantAuthorizationService;
     private NotificationMetrics notificationMetrics = new NotificationMetrics(new SimpleMeterRegistry());
 
     @Value("${notification.max-retry-count:3}")
@@ -50,6 +53,7 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
                                             UUID providerId, String providerName,
                                             String subject, String body) {
         return notificationRepository.save(Notification.builder()
+                .tenantId(currentTenantId())
                 .templateId(templateId)
                 .templateVersionId(templateVersionId)
                 .templateKey(templateKey)
@@ -112,7 +116,7 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
     @Transactional(readOnly = true)
     public Page<NotificationDetailsResponse> getNotifications(NotificationDeliveryStatus status, NotificationChannel channel,
                                                                String recipient, String providerName, Pageable pageable) {
-        return notificationRepository.findByFilters(status, channel, recipient, providerName, pageable)
+        return notificationRepository.findByTenantIdAndFilters(currentTenantId(), status, channel, recipient, providerName, pageable)
                 .map(notificationMapper::toDetailsResponse);
     }
 
@@ -129,7 +133,8 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
             return false;
         }
 
-        NotificationProvider provider = providerRepository.findById(notification.getProviderId())
+        NotificationProvider provider = providerRepository.findByTenantIdAndId(
+                currentTenantId(), notification.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
 
         if (!provider.isEnabled()) {
@@ -148,6 +153,7 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
 
     private OutboxEvent createNotificationCreatedEvent(UUID notificationId) {
         return OutboxEvent.builder()
+                .tenantId(currentTenantId())
                 .eventType("NOTIFICATION_CREATED")
                 .aggregateType("NOTIFICATION")
                 .aggregateId(notificationId)
@@ -177,7 +183,17 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
     }
 
     private Notification findByIdOrThrow(UUID id) {
-        return notificationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + id));
+        Notification notification = notificationRepository.findByTenantIdAndId(currentTenantId(), id)
+                .orElseGet(() -> notificationRepository.findById(id).orElse(null));
+        if (notification == null) {
+            throw new ResourceNotFoundException("Notification not found with id: " + id);
+        }
+        tenantAuthorizationService.requireTenantAccess(notification.getTenantId());
+        return notification;
+    }
+
+    private UUID currentTenantId() {
+        UUID tenantId = TenantContext.getCurrentTenantId();
+        return tenantId == null ? UUID.fromString("00000000-0000-0000-0000-000000000000") : tenantId;
     }
 }

@@ -29,6 +29,9 @@ spring:
       hibernate:
         format_sql: true
 
+  flyway:
+    baseline-on-migrate: true
+
 management:
   endpoints:
     web:
@@ -48,6 +51,11 @@ management:
     metrics:
       export:
         enabled: true
+
+notifyflow:
+  security:
+    enabled: ${NOTIFYFLOW_SECURITY_ENABLED:true}
+    api-keys: {}
 
 notification:
   max-retry-count: 3

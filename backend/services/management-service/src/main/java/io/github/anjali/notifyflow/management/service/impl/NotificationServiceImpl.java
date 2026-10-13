@@ -25,6 +25,8 @@ import io.github.anjali.notifyflow.management.repository.NotificationProviderRep
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateRepository;
 import io.github.anjali.notifyflow.management.repository.NotificationTemplateVersionRepository;
 import io.github.anjali.notifyflow.management.repository.OutboxEventRepository;
+import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
+import io.github.anjali.notifyflow.management.security.TenantContext;
 import io.github.anjali.notifyflow.management.service.NotificationService;
 import io.github.anjali.notifyflow.management.service.NotificationTemplateService;
 import io.github.anjali.notifyflow.management.service.NotificationTrackingService;
@@ -42,14 +44,20 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationTrackingService trackingService;
     private final NotificationTemplateService templateService;
     private final OutboxEventRepository outboxEventRepository;
+    private final TenantAuthorizationService tenantAuthorizationService;
     private io.github.anjali.notifyflow.management.observability.NotificationMetrics notificationMetrics =
             new io.github.anjali.notifyflow.management.observability.NotificationMetrics(new SimpleMeterRegistry());
 
     @Override
     @Transactional
     public NotificationResponse sendNotification(SendNotificationRequest request) {
-        NotificationTemplate template = templateRepository.findByTemplateKey(request.getTemplateKey())
-                .orElseThrow(() -> new ResourceNotFoundException("Template not found with key: " + request.getTemplateKey()));
+        UUID tenantId = currentTenantId();
+        NotificationTemplate template = templateRepository.findByTenantIdAndTemplateKey(tenantId, request.getTemplateKey())
+                .orElseGet(() -> templateRepository.findByTemplateKey(request.getTemplateKey()).orElse(null));
+        if (template == null) {
+            throw new ResourceNotFoundException("Template not found with key: " + request.getTemplateKey());
+        }
+        tenantAuthorizationService.requireTenantAccess(template.getTenantId());
 
         NotificationTemplateVersion activeVersion = versionRepository.findByTemplate_IdAndActiveTrue(template.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("No active version found for template: " + template.getTemplateKey()));
@@ -58,8 +66,12 @@ public class NotificationServiceImpl implements NotificationService {
         renderRequest.setVariables(request.getVariables());
         RenderTemplateResponse renderedTemplate = templateService.renderTemplate(template.getId(), renderRequest);
 
-        NotificationProvider provider = providerRepository.findByChannelAndIsDefaultTrue(template.getChannel())
-                .orElseThrow(() -> new ResourceNotFoundException("Default provider not found for channel: " + template.getChannel()));
+        NotificationProvider provider = providerRepository.findByTenantIdAndChannelAndIsDefaultTrue(tenantId, template.getChannel())
+                .orElseGet(() -> providerRepository.findByChannelAndIsDefaultTrue(template.getChannel()).orElse(null));
+        if (provider == null) {
+            throw new ResourceNotFoundException("Default provider not found for channel: " + template.getChannel());
+        }
+        tenantAuthorizationService.requireTenantAccess(provider.getTenantId());
 
         if (!provider.isEnabled()) {
             throw new ResourceNotFoundException("Provider is not enabled: " + provider.getName());
@@ -92,6 +104,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     private OutboxEvent createNotificationCreatedEvent(UUID notificationId) {
         return OutboxEvent.builder()
+                .tenantId(currentTenantId())
                 .eventType("NOTIFICATION_CREATED")
                 .aggregateType("NOTIFICATION")
                 .aggregateId(notificationId)
@@ -100,5 +113,10 @@ public class NotificationServiceImpl implements NotificationService {
                 .attemptCount(0)
                 .build();
         }
+
+    private UUID currentTenantId() {
+        UUID tenantId = TenantContext.getCurrentTenantId();
+        return tenantId == null ? UUID.fromString("00000000-0000-0000-0000-000000000000") : tenantId;
+    }
 
 }
