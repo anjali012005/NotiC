@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: notifyflow
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d notifyflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      rabbitmq:
+        image: rabbitmq:4-management
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 and Maven cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            backend/services/gateway-service/pom.xml
+            backend/services/management-service/pom.xml
+
+      - name: Verify management service
+        working-directory: backend/services/management-service
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/notifyflow
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
+          SPRING_RABBITMQ_HOST: localhost
+          SPRING_RABBITMQ_USERNAME: guest
+          SPRING_RABBITMQ_PASSWORD: guest
+        run: chmod +x mvnw && ./mvnw -B -ntp verify
+
+      - name: Verify API Gateway
+        working-directory: backend/services/gateway-service
+        run: chmod +x mvnw && ./mvnw -B -ntp verify
+
+      - name: Build management image
+        run: docker build --tag notifyflow-management-service:ci backend/services/management-service
+
+      - name: Build gateway image
+        run: docker build --tag notifyflow-gateway-service:ci backend/services/gateway-service

@@ -1,5 +1,6 @@
 server:
-  port: 8081
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
 
 spring:
   application:
@@ -9,21 +10,29 @@ spring:
     import: optional:file:.env[.properties]
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/notifyflow
-    username: postgres
-    password: admin
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:notifyflow}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:}}
+    hikari:
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
 
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    host: ${SPRING_RABBITMQ_HOST:${RABBITMQ_HOST:localhost}}
+    port: ${SPRING_RABBITMQ_PORT:${RABBITMQ_PORT:5672}}
+    username: ${SPRING_RABBITMQ_USERNAME:${RABBITMQ_USERNAME:}}
+    password: ${SPRING_RABBITMQ_PASSWORD:${RABBITMQ_PASSWORD:}}
+    connection-timeout: ${RABBITMQ_CONNECTION_TIMEOUT:5s}
+    listener:
+      simple:
+        prefetch: ${RABBITMQ_PREFETCH:1}
+        shutdown-timeout: ${RABBITMQ_SHUTDOWN_TIMEOUT:30s}
+        missing-queues-fatal: false
 
   jpa:
     hibernate:
-      ddl-auto: update
-
-    show-sql: true
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
 
     properties:
       hibernate:
@@ -31,6 +40,10 @@ spring:
 
   flyway:
     baseline-on-migrate: true
+    baseline-version: 15
+
+  lifecycle:
+    timeout-per-shutdown-phase: ${SPRING_LIFECYCLE_TIMEOUT:30s}
 
 management:
   endpoints:

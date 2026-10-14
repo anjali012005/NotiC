@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
 
 spring:
   application:
@@ -7,17 +8,19 @@ spring:
 
   cloud:
     gateway:
-      routes:
-        - id: management-service
-          uri: http://localhost:8081
-          predicates:
-            - Path=/api/v1/**
+      server:
+        webflux:
+          routes:
+            - id: management-service
+              uri: ${MANAGEMENT_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/**
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus,gateway
+        include: health,info
   endpoint:
     health:
       probes:
@@ -28,6 +31,8 @@ management:
           include: livenessState,ping
         readiness:
           include: readinessState
+  lifecycle:
+    timeout-per-shutdown-phase: ${SPRING_LIFECYCLE_TIMEOUT:30s}
   prometheus:
     metrics:
       export:
@@ -35,4 +40,4 @@ management:
 
 logging:
   level:
-    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway: ${GATEWAY_LOG_LEVEL:INFO}
