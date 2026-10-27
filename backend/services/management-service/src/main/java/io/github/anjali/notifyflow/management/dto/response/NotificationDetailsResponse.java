@@ -30,6 +30,7 @@ public class NotificationDetailsResponse {
     private String body;
     private NotificationDeliveryStatus status;
     private Integer retryCount;
+    private boolean retryEligible;
     private String failureReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

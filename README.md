@@ -6,6 +6,7 @@ Centralized notification infrastructure with a Spring Cloud API Gateway and a Sp
 
 - API Gateway: Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0, port 8080.
 - Management service: Java 21, Spring Boot 4.0.7, port 8081.
+- Dashboard: Next.js 16, React 19, Node.js 20.19+, port 3000 in Compose.
 - PostgreSQL 18 and RabbitMQ 4 are local infrastructure dependencies.
 - Each service is an independent Maven project with its own Maven wrapper. There is no Maven root reactor.
 - `backend/services/notification-worker` and Redis are currently empty/not used and are not started by Compose.
@@ -35,7 +36,7 @@ docker compose up -d
 docker compose ps
 ```
 
-Wait until all four services report healthy. Host ports bind to loopback by default: Gateway `8080`, Management `8081`, PostgreSQL `5432`, RabbitMQ `5672`, and RabbitMQ management UI `15672`. Override host mappings in `.env` when a port is already occupied. Only the API Gateway needs to be exposed outside a developer machine in a typical deployment; infrastructure and management ports are loopback-bound in the local stack.
+Wait until all five services report healthy. Open the dashboard at `http://localhost:3000`; it reaches the API through the internal Compose Gateway at `http://gateway-service:8080`. Host ports bind to loopback by default: Dashboard `3000`, Gateway `8080`, Management `8081`, PostgreSQL `5432`, RabbitMQ `5672`, and RabbitMQ management UI `15672`. Override host mappings in `.env` when a port is already occupied. Only the dashboard and API Gateway need to be exposed outside a developer machine in a typical deployment; infrastructure and management ports are loopback-bound in the local stack.
 
 Stop without deleting persistent data:
 
@@ -63,6 +64,7 @@ docker compose logs -f gateway-service
 docker compose logs -f management-service
 docker compose logs -f postgres
 docker compose logs -f rabbitmq
+docker compose logs -f frontend
 ```
 
 The management service requires `X-API-Key` on protected routes. For example, submit a notification through the existing Gateway route:
@@ -138,4 +140,4 @@ Store production secrets in the platform's secret manager. The current API-key c
 
 ## Deployment Status
 
-Both application services have container build definitions and a local Compose topology. This is not a production deployment. Before production, configure managed secrets, TLS/ingress, restricted network access, durable/monitored backups, log/metric collection, API-key lifecycle management, load-tested resource limits, and a tested restore and rollback procedure.
+The Gateway, management service, and dashboard have container build definitions and a local Compose topology. This is not a production deployment. Before production, configure managed secrets, TLS/ingress, restricted network access, durable/monitored backups, log/metric collection, API-key lifecycle management, load-tested resource limits, and a tested restore and rollback procedure.

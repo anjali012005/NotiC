@@ -59,6 +59,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 
+    @ExceptionHandler(InvalidProviderConfigurationException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidProviderConfiguration(InvalidProviderConfigurationException ex, HttpServletRequest request) {
+        Map<String, Object> body = buildErrorBody(HttpStatus.BAD_REQUEST, ex.getMessage(), null, request.getRequestURI());
+        return ResponseEntity.badRequest().body(body);
+    }
+
     @ExceptionHandler(MissingRequiredVariableException.class)
     public ResponseEntity<Map<String, Object>> handleMissingRequiredVariable(MissingRequiredVariableException ex, HttpServletRequest request) {
         Map<String, Object> body = buildErrorBody(HttpStatus.BAD_REQUEST, ex.getMessage(), null, request.getRequestURI());

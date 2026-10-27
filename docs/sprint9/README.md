@@ -17,12 +17,11 @@ Create an enabled default EMAIL provider with `providerType: "SENDGRID"`. Its st
 ```json
 {
   "fromEmail": "notifications@example.com",
-  "fromName": "NotifyFlow",
-  "apiKey": "optional-if-SENDGRID_API_KEY-is-set"
+  "fromName": "NotifyFlow"
 }
 ```
 
-`fromEmail` is required. The API key may instead be supplied through `SENDGRID_API_KEY`. `SENDGRID_BASE_URL` defaults to SendGrid's Mail Send endpoint and is useful for a local test stub; `SENDGRID_TIMEOUT_SECONDS` defaults to 10. Provider configuration is never returned in provider API responses; responses expose only `configured`.
+`fromEmail` is required. The SendGrid API key must be supplied through the management service's `SENDGRID_API_KEY` environment variable or a secret manager; provider configuration rejects an `apiKey` field and never returns the opaque config. `SENDGRID_BASE_URL` defaults to SendGrid's Mail Send endpoint and is useful for a local test stub; `SENDGRID_TIMEOUT_SECONDS` defaults to 10. Provider responses expose only `configured` and the boolean `credentialsConfigured`, never the secret or sender config.
 
 ## Error handling and lifecycle
 
@@ -30,7 +29,7 @@ Malformed/missing config, mismatched channel, unsupported types, timeouts and no
 
 ## Manual verification
 
-Import [the Sprint 9 Postman collection](../postman_sprint9_collection.json). Set `sendgridApiKey` (or leave it blank when the service has `SENDGRID_API_KEY`), then run the requests in order.
+Import [the Sprint 9 Postman collection](../postman_sprint9_collection.json). Set `SENDGRID_API_KEY` in the management service environment before running the requests; do not put the key in the provider request body.
 
 1. Create a SENDGRID EMAIL provider with the config above, enabled and default.
 2. Create/activate an EMAIL template, then `POST /api/v1/notifications/send`.

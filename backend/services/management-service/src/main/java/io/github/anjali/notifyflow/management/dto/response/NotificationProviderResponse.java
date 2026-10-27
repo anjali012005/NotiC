@@ -28,6 +28,7 @@ public class NotificationProviderResponse {
     @JsonIgnore
     private String config;
     private boolean configured;
+    private boolean credentialsConfigured;
     private boolean enabled;
 
     @JsonProperty("isDefault")

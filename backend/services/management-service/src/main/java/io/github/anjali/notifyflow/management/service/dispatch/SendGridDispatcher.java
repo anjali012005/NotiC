@@ -41,12 +41,7 @@ public class SendGridDispatcher implements NotificationDispatcher {
     @Override
     public void dispatch(NotificationProvider provider, String recipient, String subject, String body) {
         Map<String, String> config = parseConfig(provider.getConfig());
-        // String apiKey = config.getOrDefault("apiKey", System.getenv("SENDGRID_API_KEY"));
-        String apiKey = config.get("apiKey");
-
-        if (isBlank(apiKey)) {
-            apiKey = System.getenv("SENDGRID_API_KEY");
-        }
+        String apiKey = System.getenv("SENDGRID_API_KEY");
         String fromEmail = config.get("fromEmail");
         String fromName = config.get("fromName");
 

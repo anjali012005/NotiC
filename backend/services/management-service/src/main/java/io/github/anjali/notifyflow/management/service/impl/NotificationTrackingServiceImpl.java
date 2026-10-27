@@ -109,7 +109,22 @@ public class NotificationTrackingServiceImpl implements NotificationTrackingServ
     @Transactional(readOnly = true)
     public NotificationDetailsResponse getNotificationById(UUID id) {
         Notification notification = findByIdOrThrow(id);
-        return notificationMapper.toDetailsResponse(notification);
+        NotificationDetailsResponse response = notificationMapper.toDetailsResponse(notification);
+        response.setRetryEligible(isRetryEligible(notification));
+        return response;
+    }
+
+    private boolean isRetryEligible(Notification notification) {
+        if (notification.getStatus() != NotificationDeliveryStatus.FAILED
+                || notification.getRetryCount() == null
+                || notification.getRetryCount() >= maxRetryCount
+                || notification.getProviderId() == null) {
+            return false;
+        }
+
+        return providerRepository.findByTenantIdAndId(currentTenantId(), notification.getProviderId())
+                .map(NotificationProvider::isEnabled)
+                .orElse(false);
     }
 
     @Override

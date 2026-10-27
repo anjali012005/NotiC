@@ -24,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import io.github.anjali.notifyflow.management.entity.Notification;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
+import io.github.anjali.notifyflow.management.dto.response.NotificationDetailsResponse;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.NotificationDeliveryStatus;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
@@ -168,8 +169,10 @@ class NotificationTrackingServiceImplTest {
     @Test
     void getNotificationByIdReturnsDetails() {
         UUID notificationId = UUID.randomUUID();
+        UUID providerId = UUID.randomUUID();
         Notification notification = Notification.builder()
                 .id(notificationId)
+                .providerId(providerId)
                 .templateKey("WELCOME_EMAIL")
                 .recipient("user@example.com")
                 .channel(NotificationChannel.EMAIL)
@@ -177,14 +180,55 @@ class NotificationTrackingServiceImplTest {
                 .status(NotificationDeliveryStatus.SENT)
                 .retryCount(0)
                 .build();
+                NotificationDetailsResponse response = NotificationDetailsResponse.builder().build();
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
-        when(notificationMapper.toDetailsResponse(notification)).thenReturn(null);
+                when(notificationMapper.toDetailsResponse(notification)).thenReturn(response);
 
-        trackingService.getNotificationById(notificationId);
+                NotificationDetailsResponse result = trackingService.getNotificationById(notificationId);
 
+                assertThat(result.isRetryEligible()).isFalse();
         verify(notificationRepository).findById(notificationId);
     }
+
+        @Test
+        void getNotificationByIdUsesConfiguredRetryLimit() {
+                ReflectionTestUtils.setField(trackingService, "maxRetryCount", 5);
+                UUID notificationId = UUID.randomUUID();
+                Notification notification = Notification.builder()
+                                .id(notificationId)
+                                .providerId(UUID.randomUUID())
+                                .status(NotificationDeliveryStatus.FAILED)
+                                .retryCount(4)
+                                .build();
+                NotificationDetailsResponse response = NotificationDetailsResponse.builder().build();
+                NotificationProvider provider = NotificationProvider.builder().enabled(true).build();
+
+                when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
+                when(notificationMapper.toDetailsResponse(notification)).thenReturn(response);
+                when(providerRepository.findByTenantIdAndId(any(UUID.class), any(UUID.class))).thenReturn(Optional.of(provider));
+
+                assertThat(trackingService.getNotificationById(notificationId).isRetryEligible()).isTrue();
+        }
+
+        @Test
+        void getNotificationByIdRejectsRetryWhenProviderIsDisabled() {
+                UUID notificationId = UUID.randomUUID();
+                Notification notification = Notification.builder()
+                                .id(notificationId)
+                                .providerId(UUID.randomUUID())
+                                .status(NotificationDeliveryStatus.FAILED)
+                                .retryCount(1)
+                                .build();
+                NotificationDetailsResponse response = NotificationDetailsResponse.builder().build();
+                NotificationProvider provider = NotificationProvider.builder().enabled(false).build();
+
+                when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
+                when(notificationMapper.toDetailsResponse(notification)).thenReturn(response);
+                when(providerRepository.findByTenantIdAndId(any(UUID.class), any(UUID.class))).thenReturn(Optional.of(provider));
+
+                assertThat(trackingService.getNotificationById(notificationId).isRetryEligible()).isFalse();
+        }
 
     @Test
     void getNotificationByIdThrowsWhenNotFound() {

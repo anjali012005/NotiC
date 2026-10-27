@@ -6,6 +6,7 @@ import io.github.anjali.notifyflow.management.dto.request.CreateNotificationProv
 import io.github.anjali.notifyflow.management.dto.request.UpdateNotificationProviderRequest;
 import io.github.anjali.notifyflow.management.dto.response.NotificationProviderResponse;
 import io.github.anjali.notifyflow.management.entity.NotificationProvider;
+import io.github.anjali.notifyflow.management.enums.ProviderType;
 
 @Component
 public class NotificationProviderMapper {
@@ -33,12 +34,18 @@ public class NotificationProviderMapper {
                 .providerType(provider.getProviderType())
                 .config(provider.getConfig())
                 .configured(provider.getConfig() != null && !provider.getConfig().isBlank())
+                .credentialsConfigured(provider.getProviderType() == ProviderType.SENDGRID
+                        && !isBlank(System.getenv("SENDGRID_API_KEY")))
                 .enabled(provider.isEnabled())
                 .isDefault(provider.isDefault())
                 .createdAt(provider.getCreatedAt())
                 .updatedAt(provider.getUpdatedAt())
                 .message(message)
                 .build();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     public void updateEntity(UpdateNotificationProviderRequest request, NotificationProvider provider) {

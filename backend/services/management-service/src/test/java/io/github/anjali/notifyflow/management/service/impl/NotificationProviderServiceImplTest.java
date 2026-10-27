@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,9 +22,11 @@ import io.github.anjali.notifyflow.management.entity.NotificationProvider;
 import io.github.anjali.notifyflow.management.enums.NotificationChannel;
 import io.github.anjali.notifyflow.management.enums.ProviderType;
 import io.github.anjali.notifyflow.management.exception.DuplicateProviderException;
+import io.github.anjali.notifyflow.management.exception.InvalidProviderConfigurationException;
 import io.github.anjali.notifyflow.management.mapper.NotificationProviderMapper;
 import io.github.anjali.notifyflow.management.repository.NotificationProviderRepository;
 import io.github.anjali.notifyflow.management.security.TenantAuthorizationService;
+import io.github.anjali.notifyflow.management.security.TenantContext;
 
 class NotificationProviderServiceImplTest {
 
@@ -32,7 +36,7 @@ class NotificationProviderServiceImplTest {
     @BeforeEach
     void setUp() {
         repository = mock(NotificationProviderRepository.class);
-        service = new NotificationProviderServiceImpl(repository, new NotificationProviderMapper(), mock(TenantAuthorizationService.class));
+        service = new NotificationProviderServiceImpl(repository, new NotificationProviderMapper(), new TenantAuthorizationService());
     }
 
     @Test
@@ -55,13 +59,14 @@ class NotificationProviderServiceImplTest {
         request.setName("SendGrid");
         request.setChannel(NotificationChannel.EMAIL);
         request.setProviderType(ProviderType.SENDGRID);
-        request.setConfig("{\"apiKey\":\"x\"}");
-        request.setEnabled(true);
+        request.setConfig("{\"fromEmail\":\"notifications@example.com\"}");
+        request.setEnabled(false);
         request.setDefault(true);
 
         NotificationProviderResponse response = service.createProvider(request);
 
         assertThat(response.isDefault()).isTrue();
+        assertThat(response.isEnabled()).isTrue();
         assertThat(existing.isDefault()).isFalse();
         verify(repository).save(existing);
     }
@@ -74,11 +79,52 @@ class NotificationProviderServiceImplTest {
         request.setName("SendGrid");
         request.setChannel(NotificationChannel.EMAIL);
         request.setProviderType(ProviderType.SENDGRID);
-        request.setConfig("{}");
+        request.setConfig("{\"fromEmail\":\"notifications@example.com\"}");
 
         assertThatThrownBy(() -> service.createProvider(request))
                 .isInstanceOf(DuplicateProviderException.class)
                 .hasMessageContaining("already exists");
+    }
+
+    @Test
+    void createSendGridProvider_shouldRejectApiKeyInDatabaseConfig() {
+        CreateNotificationProviderRequest request = new CreateNotificationProviderRequest();
+        request.setName("SendGrid");
+        request.setChannel(NotificationChannel.EMAIL);
+        request.setProviderType(ProviderType.SENDGRID);
+        request.setConfig("{\"fromEmail\":\"notifications@example.com\",\"apiKey\":\"secret\"}");
+
+        assertThatThrownBy(() -> service.createProvider(request))
+                .isInstanceOf(InvalidProviderConfigurationException.class)
+                .hasMessageContaining("SENDGRID_API_KEY");
+    }
+
+    @Test
+    void getProviderById_shouldRejectCrossTenantProvider() {
+        UUID currentTenant = UUID.randomUUID();
+        UUID otherTenant = UUID.randomUUID();
+        UUID providerId = UUID.randomUUID();
+        NotificationProvider otherTenantProvider = NotificationProvider.builder()
+                .id(providerId)
+                .tenantId(otherTenant)
+                .name("Other tenant SendGrid")
+                .channel(NotificationChannel.EMAIL)
+                .providerType(ProviderType.SENDGRID)
+                .config("{\"fromEmail\":\"notifications@example.com\"}")
+                .enabled(true)
+                .isDefault(true)
+                .build();
+        when(repository.findByTenantIdAndId(currentTenant, providerId)).thenReturn(Optional.empty());
+        when(repository.findById(providerId)).thenReturn(Optional.of(otherTenantProvider));
+        TenantContext.setCurrentTenantId(currentTenant);
+
+        try {
+            assertThatThrownBy(() -> service.getProviderById(providerId))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Tenant does not have access");
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     @Test
@@ -91,13 +137,14 @@ class NotificationProviderServiceImplTest {
         request.setName("SendGrid");
         request.setChannel(NotificationChannel.EMAIL);
         request.setProviderType(ProviderType.SENDGRID);
-        request.setConfig("{\"apiKey\":\"x\"}");
-        request.setEnabled(true);
+        request.setConfig("{\"fromEmail\":\"notifications@example.com\"}");
+        request.setEnabled(false);
         request.setDefault(true);
 
         NotificationProviderResponse response = service.createProvider(request);
 
         assertThat(response.isDefault()).isTrue();
+        assertThat(response.isEnabled()).isTrue();
     }
 
     @Test
@@ -110,7 +157,7 @@ class NotificationProviderServiceImplTest {
         request.setName("SendGrid");
         request.setChannel(NotificationChannel.EMAIL);
         request.setProviderType(ProviderType.SENDGRID);
-        request.setConfig("{\"apiKey\":\"x\"}");
+        request.setConfig("{\"fromEmail\":\"notifications@example.com\"}");
         request.setEnabled(true);
         request.setDefault(false);
 

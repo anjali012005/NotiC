@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -35,14 +36,14 @@ class NotificationProviderControllerTest {
         request.setName("SendGrid");
         request.setChannel(NotificationChannel.EMAIL);
         request.setProviderType(ProviderType.SENDGRID);
-        request.setConfig("{\"apiKey\":\"x\"}");
+        request.setConfig("{\"fromEmail\":\"notifications@example.com\"}");
 
         NotificationProviderResponse response = NotificationProviderResponse.builder()
                 .id(UUID.randomUUID())
                 .name("SendGrid")
                 .channel(NotificationChannel.EMAIL)
                 .providerType(ProviderType.SENDGRID)
-                .config("{\"apiKey\":\"x\"}")
+                .config("{\"fromEmail\":\"notifications@example.com\"}")
                 .enabled(true)
                 .isDefault(false)
                 .build();
@@ -54,5 +55,25 @@ class NotificationProviderControllerTest {
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(result.getBody()).isNotNull();
         assertThat(result.getBody().getName()).isEqualTo("SendGrid");
+    }
+
+    @Test
+    void providerResponse_shouldNeverSerializeProviderConfig() throws Exception {
+        NotificationProviderResponse response = NotificationProviderResponse.builder()
+                .id(UUID.randomUUID())
+                .name("SendGrid")
+                .channel(NotificationChannel.EMAIL)
+                .providerType(ProviderType.SENDGRID)
+                .config("{\"apiKey\":\"do-not-return\",\"fromEmail\":\"notifications@example.com\"}")
+                .configured(true)
+                .credentialsConfigured(false)
+                .enabled(true)
+                .isDefault(true)
+                .build();
+
+        String json = new ObjectMapper().writeValueAsString(response);
+
+        assertThat(json).contains("credentialsConfigured").contains("false");
+        assertThat(json).doesNotContain("do-not-return", "apiKey", "fromEmail", "\"config\":");
     }
 }
