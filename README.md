@@ -141,3 +141,7 @@ Store production secrets in the platform's secret manager. The current API-key c
 ## Deployment Status
 
 The Gateway, management service, and dashboard have container build definitions and a local Compose topology. This is not a production deployment. Before production, configure managed secrets, TLS/ingress, restricted network access, durable/monitored backups, log/metric collection, API-key lifecycle management, load-tested resource limits, and a tested restore and rollback procedure.
+
+
+#Author 
+#Anjali Daharwal
