@@ -2,6 +2,10 @@
 
 Centralized notification infrastructure with a Spring Cloud API Gateway and a Spring Boot management service. The management service stores notifications and outbox events in PostgreSQL, then dispatches asynchronously through RabbitMQ.
 
+
+<img width="1915" height="942" alt="image" src="https://github.com/user-attachments/assets/0aebaa30-b26e-4f80-a110-800dcc434972" />
+
+
 ## Services and Versions
 
 - API Gateway: Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0, port 8080.
